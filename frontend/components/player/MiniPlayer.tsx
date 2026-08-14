@@ -25,7 +25,7 @@ import {
     RefreshCw,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { useVibeToggle } from "@/hooks/useVibeToggle";
 import { KeyboardShortcutsTooltip } from "./KeyboardShortcutsTooltip";
 import { SeekSlider } from "./SeekSlider";
@@ -33,7 +33,7 @@ import { SleepTimer } from "./SleepTimer";
 import { useFeatures } from "@/lib/features-context";
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress";
 
-export function MiniPlayer() {
+export const MiniPlayer = memo(function MiniPlayer() {
     const {
         currentTrack,
         currentAudiobook,
@@ -72,19 +72,27 @@ export function MiniPlayer() {
     const [isDismissed, setIsDismissed] = useState(false);
     const [swipeOffset, setSwipeOffset] = useState(0);
     const touchStartX = useRef<number | null>(null);
-    const [lastMediaId, setLastMediaId] = useState<string | null>(null);
+
+    // Track the previous media ID via ref so we can detect transitions without
+    // re-rendering on every currentTrack change. This replaces the render-time
+    // setState that violated React's rules of hooks.
+    const lastMediaIdRef = useRef<string | null>(null);
 
     const currentMediaId =
         currentTrack?.id || currentAudiobook?.id || currentPodcast?.id;
 
-    // Reset dismissed/minimized on media change or resume (render-time derived state)
-    if (currentMediaId && currentMediaId !== lastMediaId) {
-        setLastMediaId(currentMediaId);
-        if (isDismissed) setIsDismissed(false);
-        if (isMinimized) setIsMinimized(false);
-    } else if (currentMediaId && isDismissed && isPlaying) {
-        setIsDismissed(false);
-    }
+    // Sync UI state when media changes: clear dismissed/minimized when switching
+    // tracks or when resuming playback while dismissed.
+    // Effect fires after every render, so it always sees the latest state.
+    useEffect(() => {
+        if (currentMediaId && currentMediaId !== lastMediaIdRef.current) {
+            lastMediaIdRef.current = currentMediaId;
+            setIsDismissed(false);
+            setIsMinimized(false);
+        } else if (currentMediaId && isDismissed && isPlaying) {
+            setIsDismissed(false);
+        }
+    });
 
 
     const { title, subtitle, coverUrl, mediaLink, hasMedia } = useMediaInfo(100);
@@ -682,4 +690,4 @@ export function MiniPlayer() {
             </div>
         </div>
     );
-}
+});

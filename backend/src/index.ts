@@ -584,9 +584,13 @@ process.on("uncaughtException", (error) => {
 });
 
 // Periodic health check to keep database connections alive and detect issues early
-// Runs every 5 minutes to prevent idle connection drops
+// Runs every 5 minutes to prevent idle connection drops.
+// Guarded with isShuttingDown to avoid attempting reconnect after the
+// connection has already been cleanly closed during shutdown.
 const HEALTH_CHECK_INTERVAL = 5 * 60 * 1000;
 healthCheckInterval = setInterval(async () => {
+    if (isShuttingDown) return;
+
     try {
         // Ping PostgreSQL
         await prisma.$queryRaw`SELECT 1`;
@@ -599,6 +603,8 @@ healthCheckInterval = setInterval(async () => {
         logger.error("Health check failed - connections may be stale:", {
             error: error instanceof Error ? error.message : String(error),
         });
+        if (isShuttingDown) return;
+
         // Attempt to reconnect Prisma
         try {
             await prisma.$disconnect();

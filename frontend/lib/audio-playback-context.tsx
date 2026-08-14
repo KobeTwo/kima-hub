@@ -69,18 +69,28 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
     const progressKey = isHydrated && !isPlaying
         ? `${state.playbackType}-${state.currentAudiobook?.progress?.currentTime}-${state.currentPodcast?.progress?.currentTime}`
         : null;
-    const [prevProgressKey, setPrevProgressKey] = useState<string | null>(progressKey);
 
-    if (progressKey !== prevProgressKey) {
-        setPrevProgressKey(progressKey);
-        if (progressKey !== null) {
-            if (state.playbackType === "audiobook" && state.currentAudiobook?.progress?.currentTime) {
-                setCurrentTime(state.currentAudiobook.progress.currentTime);
-            } else if (state.playbackType === "podcast" && state.currentPodcast?.progress?.currentTime) {
-                setCurrentTime(state.currentPodcast.progress.currentTime);
+    // Use a ref to detect progress key changes without triggering re-renders.
+    // This is the canonical "previous value" pattern — the ref is always one render
+    // behind, exactly what we need to detect a change and respond.
+    const prevProgressKeyRef = useRef<string | null>(null);
+    const didProgressKeyChange = progressKey !== prevProgressKeyRef.current;
+
+    // Sync state after render: when the progress key changes (e.g., another device
+    // updated playback position), jump to the new position. This effect runs after
+    // every render so it always has a fresh progressKey value — no stale closures.
+    useEffect(() => {
+        if (didProgressKeyChange) {
+            prevProgressKeyRef.current = progressKey;
+            if (progressKey !== null) {
+                if (state.playbackType === "audiobook" && state.currentAudiobook?.progress?.currentTime) {
+                    setCurrentTime(state.currentAudiobook.progress.currentTime);
+                } else if (state.playbackType === "podcast" && state.currentPodcast?.progress?.currentTime) {
+                    setCurrentTime(state.currentPodcast.progress.currentTime);
+                }
             }
         }
-    }
+    });
 
     const controller = useAudioController();
 

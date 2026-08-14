@@ -33,12 +33,37 @@ interface StreamFileInfo {
     mimeType: string;
 }
 
+const IN_FLIGHT_TIMEOUT_MS = 5 * 60 * 1000; // 5 min — stale entries cleared on next operation
+const IN_FLIGHT_MAX_SIZE = 50;              // prevent unbounded growth under burst load
+
 export class AudioStreamingService {
     private transcodeQueue = new PQueue({ concurrency: 3 });
     private transcodeCachePath: string;
     private transcodeCacheMaxGb: number;
     private evictionInterval: NodeJS.Timeout | null = null;
-    private inFlightTranscodes = new Map<string, Promise<string>>();
+    private inFlightTranscodes = new Map<string, { promise: Promise<string>; startedAt: number }>();
+
+    /** Remove timed-out entries and trim to MAX_SIZE before adding a new entry. */
+    private pruneInFlightTranscodes(): void {
+        const now = Date.now();
+        for (const [key, entry] of this.inFlightTranscodes) {
+            if (now - entry.startedAt > IN_FLIGHT_TIMEOUT_MS) {
+                this.inFlightTranscodes.delete(key);
+            }
+        }
+        while (this.inFlightTranscodes.size >= IN_FLIGHT_MAX_SIZE) {
+            // Remove oldest entry
+            let oldestKey: string | undefined;
+            let oldestTime = Infinity;
+            for (const [key, entry] of this.inFlightTranscodes) {
+                if (entry.startedAt < oldestTime) {
+                    oldestTime = entry.startedAt;
+                    oldestKey = key;
+                }
+            }
+            if (oldestKey) this.inFlightTranscodes.delete(oldestKey);
+        }
+    }
 
     constructor(
         transcodeCachePath: string,
@@ -145,8 +170,11 @@ export class AudioStreamingService {
 
         if (this.inFlightTranscodes.has(dedupeKey)) {
             logger.debug(`[STREAM] Waiting for in-flight transcode: ${dedupeKey}`);
-            transcodedPath = await this.inFlightTranscodes.get(dedupeKey)!;
+            transcodedPath = await this.inFlightTranscodes.get(dedupeKey)!.promise;
         } else {
+            // Prune stale/overflow entries before adding a new one
+            this.pruneInFlightTranscodes();
+
             logger.debug(
                 `[STREAM] Transcoding to ${quality} quality: ${sourceAbsolutePath}`
             );
@@ -156,7 +184,7 @@ export class AudioStreamingService {
                 () => this.transcodeToCache(trackId, quality, sourceAbsolutePath, sourceModified),
                 { timeout: 240_000, priority }
             ) as Promise<string>;
-            this.inFlightTranscodes.set(dedupeKey, promise);
+            this.inFlightTranscodes.set(dedupeKey, { promise, startedAt: Date.now() });
             try {
                 transcodedPath = await promise;
             } finally {

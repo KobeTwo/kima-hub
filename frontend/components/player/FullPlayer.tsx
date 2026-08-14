@@ -29,7 +29,7 @@ import {
     ListPlus,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { useToast } from "@/lib/toast-context";
 import { useVibeToggle } from "@/hooks/useVibeToggle";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
@@ -44,7 +44,7 @@ import { SleepTimer } from "./SleepTimer";
 import { useLyricsToggle } from "@/hooks/useLyricsToggle";
 
 
-export function FullPlayer() {
+export const FullPlayer = memo(function FullPlayer() {
     const { toast } = useToast();
     // Use split contexts to avoid re-rendering on every currentTime update
     const {
@@ -569,4 +569,4 @@ export function FullPlayer() {
         )}
         </>
     );
-}
+});

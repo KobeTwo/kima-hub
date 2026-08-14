@@ -4,7 +4,7 @@ import { config } from "../config";
 
 const redisClient = new Redis(config.redisUrl, {
     enableReadyCheck: true,
-    maxRetriesPerRequest: 0,
+    maxRetriesPerRequest: null, // Blocking — required for consistency with BullMQ workers
     enableOfflineQueue: false,
     retryStrategy: (times) => Math.min(times * 100, 3000),
 });
