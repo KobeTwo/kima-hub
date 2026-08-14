@@ -172,7 +172,6 @@ import {
     triggerEnrichmentNow,
     reRunArtistsOnly,
     reRunMoodTagsOnly,
-    reRunAudioAnalysisOnly,
     runFullEnrichment,
     startUnifiedEnrichmentWorker,
 } from "../unifiedEnrichment";
@@ -310,68 +309,6 @@ describe("Enrichment State Machine", () => {
             const result = await reRunArtistsOnly();
             expect(result).toBeDefined();
             expect(result.count).toBeDefined();
-        });
-    });
-
-    describe("Python analyzer bridge (C2)", () => {
-        it("should publish resume to audio:analysis:control when triggerEnrichmentNow is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await triggerEnrichmentNow();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when reRunArtistsOnly is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await reRunArtistsOnly();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when runFullEnrichment is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await runFullEnrichment();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when reRunMoodTagsOnly is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await reRunMoodTagsOnly();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when reRunAudioAnalysisOnly is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await reRunAudioAnalysisOnly();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
         });
     });
 

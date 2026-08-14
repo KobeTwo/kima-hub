@@ -19,21 +19,19 @@ import {
     RotateCcw,
     RotateCw,
     Loader2,
-    AudioWaveform,
     ChevronLeft,
     AlertTriangle,
     RefreshCw,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useState, useRef, useEffect, memo } from "react";
-import { useVibeToggle } from "@/hooks/useVibeToggle";
+import { useState, useRef } from "react";
 import { KeyboardShortcutsTooltip } from "./KeyboardShortcutsTooltip";
 import { SeekSlider } from "./SeekSlider";
 import { SleepTimer } from "./SleepTimer";
 import { useFeatures } from "@/lib/features-context";
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress";
 
-export const MiniPlayer = memo(function MiniPlayer() {
+export function MiniPlayer() {
     const {
         currentTrack,
         currentAudiobook,
@@ -67,32 +65,23 @@ export const MiniPlayer = memo(function MiniPlayer() {
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
     const { loading: featuresLoading } = useFeatures();
-    const { handleVibeToggle, isVibeLoading } = useVibeToggle();
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDismissed, setIsDismissed] = useState(false);
     const [swipeOffset, setSwipeOffset] = useState(0);
     const touchStartX = useRef<number | null>(null);
-
-    // Track the previous media ID via ref so we can detect transitions without
-    // re-rendering on every currentTrack change. This replaces the render-time
-    // setState that violated React's rules of hooks.
-    const lastMediaIdRef = useRef<string | null>(null);
+    const [lastMediaId, setLastMediaId] = useState<string | null>(null);
 
     const currentMediaId =
         currentTrack?.id || currentAudiobook?.id || currentPodcast?.id;
 
-    // Sync UI state when media changes: clear dismissed/minimized when switching
-    // tracks or when resuming playback while dismissed.
-    // Effect fires after every render, so it always sees the latest state.
-    useEffect(() => {
-        if (currentMediaId && currentMediaId !== lastMediaIdRef.current) {
-            lastMediaIdRef.current = currentMediaId;
-            setIsDismissed(false);
-            setIsMinimized(false);
-        } else if (currentMediaId && isDismissed && isPlaying) {
-            setIsDismissed(false);
-        }
-    });
+    // Reset dismissed/minimized on media change or resume (render-time derived state)
+    if (currentMediaId && currentMediaId !== lastMediaId) {
+        setLastMediaId(currentMediaId);
+        if (isDismissed) setIsDismissed(false);
+        if (isMinimized) setIsMinimized(false);
+    } else if (currentMediaId && isDismissed && isPlaying) {
+        setIsDismissed(false);
+    }
 
 
     const { title, subtitle, coverUrl, mediaLink, hasMedia } = useMediaInfo(100);
@@ -302,44 +291,13 @@ export const MiniPlayer = memo(function MiniPlayer() {
                                     )}
                                 </div>
 
-                                {/* Controls - Vibe button (for music only) & Play/Pause */}
+                                {/* Controls - Play/Pause */}
                                 <div
                                     className="flex items-center gap-1.5 flex-shrink-0"
                                     onClick={(e) => e.stopPropagation()}
                                     role="group"
                                     aria-label="Playback controls"
                                 >
-                                    {/* Vibe button - only for music tracks */}
-                                    {!featuresLoading && canSkip && (
-                                        <button
-                                            onClick={handleVibeToggle}
-                                            disabled={isVibeLoading}
-                                            className={cn(
-                                                "w-10 h-10 flex items-center justify-center rounded-full transition-colors",
-                                                activeOperation.type !== 'idle'
-                                                    ? "text-brand"
-                                                    : "text-white/80 hover:text-brand"
-                                            )}
-                                            aria-label={
-                                                activeOperation.type !== 'idle'
-                                                    ? "Turn off vibe mode"
-                                                    : "Match this vibe"
-                                            }
-                                            aria-pressed={activeOperation.type !== 'idle'}
-                                            title={
-                                                activeOperation.type !== 'idle'
-                                                    ? "Turn off vibe mode"
-                                                    : "Match this vibe"
-                                            }
-                                        >
-                                            {isVibeLoading ? (
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                            ) : (
-                                                <AudioWaveform className="w-5 h-5" />
-                                            )}
-                                        </button>
-                                    )}
-
                                     {/* Play/Pause or Retry */}
                                     <button
                                         onClick={() => {
@@ -654,35 +612,6 @@ export const MiniPlayer = memo(function MiniPlayer() {
                             )}
                         </button>
 
-                        {/* Vibe Mode Toggle */}
-                        {!featuresLoading && (
-                            <button
-                                onClick={handleVibeToggle}
-                                disabled={!hasMedia || !canSkip || isVibeLoading}
-                                className={cn(
-                                    "rounded p-1.5 transition-colors",
-                                    !hasMedia || !canSkip
-                                        ? "text-gray-600 cursor-not-allowed"
-                                        : activeOperation.type !== 'idle'
-                                        ? "text-brand hover:text-brand-hover"
-                                        : "text-gray-400 hover:text-brand"
-                                )}
-                                aria-label="Toggle vibe visualization"
-                                aria-pressed={activeOperation.type !== 'idle'}
-                                title={
-                                    activeOperation.type !== 'idle'
-                                        ? "Turn off vibe mode"
-                                        : "Match this vibe - find similar sounding tracks"
-                                }
-                            >
-                                {isVibeLoading ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                    <AudioWaveform className="w-3.5 h-3.5" />
-                                )}
-                            </button>
-                        )}
-
                         {/* Keyboard Shortcuts */}
                         <KeyboardShortcutsTooltip />
                     </div>
@@ -690,4 +619,4 @@ export const MiniPlayer = memo(function MiniPlayer() {
             </div>
         </div>
     );
-});
+}

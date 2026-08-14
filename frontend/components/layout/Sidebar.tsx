@@ -20,7 +20,6 @@ const allNavigation = [
     { name: "Collection", href: "/collection", feature: null },
     { name: "Radio", href: "/radio", feature: null },
     { name: "Discovery", href: "/discover", feature: null },
-    { name: "Vibe", href: "/vibe", feature: null },
     { name: "Audiobooks", href: "/audiobooks", feature: "audiobookshelfEnabled" as const },
     { name: "Podcasts", href: "/podcasts", feature: null },
     { name: "Browse", href: "/browse/playlists", feature: null },

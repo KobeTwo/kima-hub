@@ -7,7 +7,8 @@ const router = Router();
 
 /**
  * GET /api/system/features
- * Returns which analyzer features are available based on running services
+ * Returns which features are available
+ * Note: musicCNN and vibeEmbeddings are always false (audio analysis removed)
  */
 router.get("/features", requireAuth, async (req, res) => {
     try {

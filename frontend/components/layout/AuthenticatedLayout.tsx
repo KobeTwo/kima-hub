@@ -172,7 +172,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             tabIndex={-1}
                             className="flex-1 bg-gradient-to-b from-[#1a1a1a] via-black to-black rounded-lg overflow-y-auto relative focus:outline-none"
                         >
-                            {pathname !== "/vibe" && <GalaxyBackground />}
+                            <GalaxyBackground />
                             {children}
                         </main>
                         <UnifiedPanel

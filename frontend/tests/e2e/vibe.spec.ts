@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { loginAsTestUser, getAuthToken } from "./fixtures/test-helpers";
 
+test.skip("vibe page tests -- page removed", async () => {});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

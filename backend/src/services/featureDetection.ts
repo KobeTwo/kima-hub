@@ -1,11 +1,5 @@
-import { existsSync } from "fs";
-import { redisClient } from "../utils/redis";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
-
-// Analyzer script paths in the Docker image
-const ESSENTIA_ANALYZER_PATH = "/app/audio-analyzer/analyzer.py";
-const CLAP_ANALYZER_PATH = "/app/audio-analyzer-clap/analyzer.py";
 
 export interface AvailableFeatures {
     musicCNN: boolean;
@@ -13,106 +7,38 @@ export interface AvailableFeatures {
     audiobookshelfEnabled: boolean;
 }
 
-const HEARTBEAT_TTL = 300000; // 5 minutes
-const CACHE_TTL = 60000; // 60 seconds
-
-class FeatureDetectionService {
-    private cache: AvailableFeatures | null = null;
-    private lastCheck: number = 0;
+export const featureDetection = {
+    cache: null as { features: AvailableFeatures; lastCheck: number } | null,
+    CACHE_TTL: 60000,
 
     async getFeatures(): Promise<AvailableFeatures> {
         const now = Date.now();
-        if (this.cache && now - this.lastCheck < CACHE_TTL) {
-            return this.cache;
+
+        if (this.cache && (now - this.cache.lastCheck) < this.CACHE_TTL) {
+            return this.cache.features;
         }
 
-        const [musicCNN, vibeEmbeddings, audiobookshelfEnabled] = await Promise.all([
-            this.checkMusicCNN(),
-            this.checkCLAP(),
-            this.checkAudiobookshelf(),
-        ]);
+        const features: AvailableFeatures = {
+            musicCNN: false,
+            vibeEmbeddings: false,
+            audiobookshelfEnabled: await this.checkAudiobookshelf(),
+        };
 
-        this.cache = { musicCNN, vibeEmbeddings, audiobookshelfEnabled };
-        this.lastCheck = now;
+        this.cache = { features, lastCheck: now };
+        logger.debug("[FeatureDetection] Available features:", features);
+        return features;
+    },
 
-        logger.debug(
-            `[FEATURE-DETECTION] Features: musicCNN=${musicCNN}, vibeEmbeddings=${vibeEmbeddings}, audiobookshelf=${audiobookshelfEnabled}`
-        );
-
-        return this.cache;
-    }
-
-    private async checkMusicCNN(): Promise<boolean> {
+    async checkAudiobookshelf(): Promise<boolean> {
         try {
-            // Analyzer script bundled in image = feature is available
-            if (existsSync(ESSENTIA_ANALYZER_PATH)) {
-                return true;
-            }
-
-            const heartbeat = await redisClient.get("audio:worker:heartbeat");
-            if (heartbeat) {
-                const timestamp = parseInt(heartbeat, 10);
-                if (!isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL) {
-                    return true;
-                }
-            }
-
-            const trackWithEnergy = await prisma.track.findFirst({
-                where: { energy: { not: null } },
-                select: { id: true },
-            });
-            return trackWithEnergy !== null;
-        } catch (error) {
-            logger.error("[FEATURE-DETECTION] Error checking MusicCNN:", error);
-            return false;
-        }
-    }
-
-    private async checkCLAP(): Promise<boolean> {
-        try {
-            // If explicitly disabled via env var, CLAP is not available
-            const disabled = process.env.DISABLE_CLAP;
-            if (disabled === "true" || disabled === "1") {
-                return false;
-            }
-
-            if (existsSync(CLAP_ANALYZER_PATH)) {
-                return true;
-            }
-
-            const heartbeat = await redisClient.get("clap:worker:heartbeat");
-            if (heartbeat) {
-                const timestamp = parseInt(heartbeat, 10);
-                if (!isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL) {
-                    return true;
-                }
-            }
-
-            const embeddingCount = await prisma.trackEmbedding.count();
-            return embeddingCount > 0;
-        } catch (error) {
-            logger.error("[FEATURE-DETECTION] Error checking CLAP:", error);
-            return false;
-        }
-    }
-
-    private async checkAudiobookshelf(): Promise<boolean> {
-        try {
-            const settings = await prisma.systemSettings.findUnique({
-                where: { id: "default" },
-                select: { audiobookshelfEnabled: true },
-            });
+            const settings = await prisma.systemSettings.findFirst();
             return settings?.audiobookshelfEnabled ?? false;
-        } catch (error) {
-            logger.error("[FEATURE-DETECTION] Error checking Audiobookshelf:", error);
+        } catch {
             return false;
         }
-    }
+    },
 
-    invalidateCache(): void {
+    async invalidateCache(): Promise<void> {
         this.cache = null;
-        this.lastCheck = 0;
-    }
-}
-
-export const featureDetection = new FeatureDetectionService();
+    },
+};

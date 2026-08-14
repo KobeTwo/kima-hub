@@ -77,7 +77,7 @@ test.describe("Auth Flow", () => {
     });
 
     test("protected routes redirect unauthenticated users", async ({ page }) => {
-        for (const route of ["/collection", "/settings", "/search", "/queue", "/vibe"]) {
+        for (const route of ["/collection", "/settings", "/search", "/queue"]) {
             await page.goto(route);
             await expect(page).toHaveURL(/login/, { timeout: 10000 });
         }
@@ -102,7 +102,6 @@ test.describe("Route Health", () => {
             { path: "/settings", name: "Settings" },
             { path: "/discover", name: "Discover" },
             { path: "/releases", name: "Releases" },
-            { path: "/vibe", name: "Vibe" },
             { path: "/playlists", name: "Playlists" },
             { path: "/audiobooks", name: "Audiobooks" },
             { path: "/podcasts", name: "Podcasts" },
@@ -411,7 +410,7 @@ test.describe("Settings", () => {
 // ============================================================
 // 7. VIBE / DISCOVERY
 // ============================================================
-test.describe("Vibe & Discovery", () => {
+test.describe.skip("Vibe & Discovery", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
 
     test("vibe page loads without crash", async ({ page }) => {
@@ -555,7 +554,7 @@ test.describe("Mobile Layout", () => {
 
     test("mobile: overflow audit across pages", async ({ page }) => {
         const overflowPages: string[] = [];
-        for (const route of ["/", "/collection", "/search", "/settings", "/vibe", "/queue"]) {
+        for (const route of ["/", "/collection", "/search", "/settings", "/queue"]) {
             await page.goto(route, { waitUntil: "domcontentloaded" });
             await settle(page);
 
@@ -692,7 +691,6 @@ test.describe("Performance", () => {
             ["Collection", "/collection?tab=albums"],
             ["Search", "/search"],
             ["Settings", "/settings"],
-            ["Vibe", "/vibe"],
         ] as const) {
             const start = Date.now();
             await page.goto(path, { waitUntil: "domcontentloaded" });
@@ -745,7 +743,7 @@ test.describe("Full Audit", () => {
         const routes = [
             "/", "/collection", "/collection?tab=albums", "/collection?tab=artists",
             "/collection?tab=tracks", "/search", "/queue", "/settings",
-            "/discover", "/releases", "/vibe", "/playlists",
+            "/discover", "/releases", "/playlists",
             "/audiobooks", "/podcasts", "/radio",
         ];
 
@@ -786,7 +784,7 @@ test.describe("Full Audit", () => {
         const routes = [
             "/", "/collection", "/collection?tab=albums", "/collection?tab=artists",
             "/collection?tab=tracks", "/search", "/queue", "/settings",
-            "/discover", "/releases", "/vibe", "/playlists",
+            "/discover", "/releases", "/playlists",
             "/audiobooks", "/podcasts", "/radio",
         ];
 
