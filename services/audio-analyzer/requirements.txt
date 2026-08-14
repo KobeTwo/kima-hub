@@ -1,9 +1,0 @@
-# Audio Analyzer Requirements
-# Note: essentia-tensorflow is installed directly in Dockerfile for Python 3.7
-
-# Queue and database
-redis>=4.5.0
-psycopg2-binary>=2.9.0
-
-# Numeric operations (compatible with older TensorFlow)
-numpy>=1.19.0,<1.24.0
