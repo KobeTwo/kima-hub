@@ -22,22 +22,21 @@ import {
     RotateCcw,
     RotateCw,
     Loader2,
-    AudioWaveform,
     RefreshCw,
     MicVocal,
     ListMusic,
     ListPlus,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useToast } from "@/lib/toast-context";
-import { useVibeToggle } from "@/hooks/useVibeToggle";
+
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { useAddToPlaylistMutation } from "@/hooks/useQueries";
 import { KeyboardShortcutsTooltip } from "./KeyboardShortcutsTooltip";
 import { cn } from "@/utils/cn";
-import { computeVibeMatchScore } from "@/utils/vibeMatchScore";
-import { useFeatures } from "@/lib/features-context";
+
+
 import { formatTime, formatTimeRemaining } from "@/utils/formatTime";
 import { SeekSlider } from "./SeekSlider";
 import { SleepTimer } from "./SleepTimer";
@@ -86,19 +85,9 @@ export function FullPlayer() {
 
     const router = useRouter();
     const pathname = usePathname();
-    const { handleVibeToggle, isVibeLoading } = useVibeToggle();
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
-    const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
     const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ isMobile: false });
     const { mutateAsync: addToPlaylist } = useAddToPlaylistMutation();
-
-    const currentTrackFeatures = queue[currentIndex]?.audioFeatures || null;
-
-    const vibeMatchScore = useMemo(() => {
-        if (activeOperation.type === 'idle' || !('sourceFeatures' in activeOperation)) return null;
-        return computeVibeMatchScore(activeOperation.sourceFeatures, currentTrackFeatures);
-    }, [activeOperation, currentTrackFeatures]);
-
 
     const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } = useMediaInfo(100);
 
@@ -182,22 +171,6 @@ export function FullPlayer() {
                                 <p className="text-xs text-gray-400 truncate">
                                     {subtitle}
                                 </p>
-                            )}
-                            {/* Vibe match score when in vibe mode */}
-                            {activeOperation.type !== 'idle' && vibeMatchScore !== null && (
-                                <span
-                                    className={cn(
-                                        "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded mt-1",
-                                        vibeMatchScore >= 80
-                                            ? "bg-green-500/20 text-green-400"
-                                            : vibeMatchScore >= 60
-                                            ? "bg-brand/20 text-brand"
-                                            : "bg-orange-500/20 text-orange-400"
-                                    )}
-                                >
-                                    <AudioWaveform className="w-2.5 h-2.5" />
-                                    {vibeMatchScore}% match
-                                </span>
                             )}
                         </div>
                         <SleepTimer />
@@ -360,43 +333,6 @@ export function FullPlayer() {
                                     <Repeat className="w-4 h-4" />
                                 )}
                             </button>
-
-                            {/* Vibe Mode Toggle - only when embeddings available */}
-                            {!featuresLoading && vibeEmbeddings && (
-                                <button
-                                    onClick={handleVibeToggle}
-                                    className={cn(
-                                        "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                        !hasMedia || playbackType !== "track"
-                                            ? "text-gray-600"
-                                            : activeOperation.type !== 'idle'
-                                            ? "text-brand hover:text-brand-hover"
-                                            : "text-gray-400 hover:text-brand"
-                                    )}
-                                    disabled={
-                                        !hasMedia ||
-                                        playbackType !== "track" ||
-                                        isVibeLoading
-                                    }
-                                    aria-label={
-                                        activeOperation.type !== 'idle'
-                                            ? "Turn off vibe mode"
-                                            : "Match this vibe"
-                                    }
-                                    aria-pressed={activeOperation.type !== 'idle'}
-                                    title={
-                                        activeOperation.type !== 'idle'
-                                            ? "Turn off vibe mode"
-                                            : "Match this vibe - find similar sounding tracks"
-                                    }
-                                >
-                                    {isVibeLoading ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <AudioWaveform className="w-4 h-4" />
-                                    )}
-                                </button>
-                            )}
 
                             {/* Lyrics Toggle */}
                             {playbackType === "track" && (

@@ -29,7 +29,6 @@ const MANIFEST = {
         { src: "assets/icons/icon-512.webp", type: "image/webp", sizes: "512x512", purpose: "any maskable" },
     ],
     shortcuts: [
-        { name: "Vibe", short_name: "Vibe", url: "/vibe", icons: [{ src: "assets/icons/icon-96.webp", sizes: "96x96" }] },
         { name: "Search", short_name: "Search", url: "/search", icons: [{ src: "assets/icons/icon-96.webp", sizes: "96x96" }] },
         { name: "Library", short_name: "Library", url: "/library", icons: [{ src: "assets/icons/icon-96.webp", sizes: "96x96" }] },
     ],

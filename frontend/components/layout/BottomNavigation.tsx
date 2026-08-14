@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Library, Sparkles, BookOpen, Mic, ListMusic } from "lucide-react";
+import { Library, BookOpen, Mic, ListMusic } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
@@ -12,12 +12,6 @@ const navigationItems = [
         href: "/collection",
         icon: Library,
         matchPattern: "/collection"
-    },
-    {
-        name: "Vibe",
-        href: "/vibe",
-        icon: Sparkles,
-        matchPattern: "/vibe"
     },
     {
         name: "Audiobooks",
