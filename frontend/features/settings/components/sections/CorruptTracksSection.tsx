@@ -36,7 +36,7 @@ export function CorruptTracksSection() {
         >
             <SettingsRow
                 label="Corrupt files detected"
-                description="These files failed audio analysis and may be incomplete or damaged"
+                description="These files may be incomplete or damaged"
             >
                 <div className="flex items-center gap-3">
                     {isLoading ? (
