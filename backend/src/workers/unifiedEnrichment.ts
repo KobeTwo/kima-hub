@@ -1,14 +1,9 @@
 /**
  * Unified Enrichment Worker
  *
- * Handles ALL enrichment in one place:
+ * Handles enrichment:
  * - Artist metadata (Last.fm, MusicBrainz)
  * - Track mood tags (Last.fm)
- * - Audio analysis (triggers Essentia via Redis queue)
- *
- * Two modes:
- * 1. FULL: Re-enriches everything regardless of status (Settings > Enrich)
- * 2. INCREMENTAL: Only new material and incomplete items (Sync)
  */
 
 import { logger } from "../utils/logger";
@@ -29,20 +24,9 @@ import {
 import { startArtistEnrichmentWorker } from "./artistEnrichmentWorker";
 import { startTrackEnrichmentWorker } from "./trackEnrichmentWorker";
 import { startPodcastEnrichmentWorker } from "./podcastEnrichmentWorker";
-import {
-    startAudioCompletionSubscriber,
-    stopAudioCompletionSubscriber,
-    haltVibeQueuing,
-    resumeVibeQueuing,
-} from "./audioCompletionSubscriber";
 import { enrichmentStateService } from "../services/enrichmentState";
 import { enrichmentFailureService } from "../services/enrichmentFailureService";
 import fs from "fs";
-import { audioAnalysisCleanupService } from "../services/audioAnalysisCleanup";
-import { featureDetection } from "../services/featureDetection";
-import { musicBrainzService } from "../services/musicbrainz";
-import { trackIdentityService } from "../services/trackIdentity";
-import { precomputeProjection } from "../services/umapProjection";
 
 // Configuration
 const ARTIST_BATCH_SIZE = 10;
@@ -70,10 +54,7 @@ let immediateEnrichmentRequested = false;
 let activeEnrichmentWorkers: BullWorker[] = [];
 let consecutiveSystemFailures = 0; // Track consecutive system-level failures
 let lastRunTime = 0;
-let audioLastCycleCompletedCount: number | null = null;
 const MIN_INTERVAL_MS = 10000; // Minimum 10s between cycles
-
-const AUDIO_ANALYSIS_CONTROL_CHANNEL = "audio:analysis:control";
 
 // Timestamp for once-per-hour orphaned failure record cleanup
 let lastOrphanedFailuresCleanup: Date | null = null;
@@ -90,17 +71,7 @@ async function clearPauseState(): Promise<void> {
     isStopping = false;
     userStopped = false;
     userStoppedWarned = false;
-    // Resume BullMQ enrichment workers + vibe queue
     Promise.all(activeEnrichmentWorkers.map((w) => w.resume())).catch(() => {});
-    resumeVibeQueuing();
-    // Clear synchronous gate BEFORE pub/sub resume -- Python sees "open" immediately
-    await enrichmentStateService.clearGate();
-    // Resume the Python audio analyzer in case it was paused by a prior stop
-    try {
-        await enrichmentStateService.publishToChannel(AUDIO_ANALYSIS_CONTROL_CHANNEL, "resume");
-    } catch (err) {
-        logger.warn(`[Enrichment] Failed to resume audio analyzer: ${(err as Error).message}`);
-    }
 }
 
 // Mood tags to extract from Last.fm
@@ -237,24 +208,17 @@ async function setupControlChannel() {
                     isPaused = true;
                     logger.debug("[Enrichment] Paused");
                     Promise.all(activeEnrichmentWorkers.map((w) => w.pause())).catch(() => {});
-                    haltVibeQueuing();
                 } else if (message === "resume") {
                     isPaused = false;
                     logger.debug("[Enrichment] Resumed");
                     Promise.all(activeEnrichmentWorkers.map((w) => w.resume())).catch(() => {});
-                    resumeVibeQueuing();
                 } else if (message === "stop") {
                     isStopping = true;
                     isPaused = true;
                     logger.debug(
                         "[Enrichment] Stopping gracefully - completing current item...",
                     );
-                    // Pause all BullMQ workers + halt vibe queuing
                     Promise.all(activeEnrichmentWorkers.map((w) => w.pause())).catch(() => {});
-                    haltVibeQueuing();
-                    // DO NOT kill the CLAP analyzer — it has its own idle timeout (MODEL_IDLE_TIMEOUT=300s)
-                    // and will unload the model when the vibe queue is empty. Killing it caused
-                    // permanent death because supervisor's autorestart didn't revive clean exits.
                 }
             }
         });
@@ -274,15 +238,6 @@ export async function startUnifiedEnrichmentWorker() {
     logger.debug("");
 
      // Crash recovery: reset orphaned entities stuck mid-processing from a previous crash
-     // Include "queued" -- Redis queue may have been lost during restart
-     const orphanedAudio = await prisma.track.updateMany({
-         where: { analysisStatus: { in: ["processing", "queued"] } },
-         data: { analysisStatus: "pending", analysisStartedAt: null, analysisRetryCount: 0 },
-     });
-     const orphanedVibe = await prisma.track.updateMany({
-         where: { vibeAnalysisStatus: "processing" },
-         data: { vibeAnalysisStatus: "pending", vibeAnalysisStartedAt: null },
-     });
      const orphanedArtists = await prisma.artist.updateMany({
          where: { enrichmentStatus: "enriching" },
          data: { enrichmentStatus: "pending" },
@@ -296,15 +251,12 @@ export async function startUnifiedEnrichmentWorker() {
          where: { scanStatus: "validating" },
          data: { scanStatus: "pending", scanError: null },
      });
-     const totalOrphaned = orphanedAudio.count + orphanedVibe.count + orphanedArtists.count + orphanedQueued.count + orphanedScan.count;
+     const totalOrphaned = orphanedArtists.count + orphanedQueued.count + orphanedScan.count;
      if (totalOrphaned > 0) {
          logger.info(
-             `[Enrichment] Crash recovery: reset ${orphanedAudio.count} audio, ${orphanedVibe.count} vibe, ${orphanedArtists.count} artists, ${orphanedQueued.count} _queued, ${orphanedScan.count} scan tracks`
+             `[Enrichment] Crash recovery: reset ${orphanedArtists.count} artists, ${orphanedQueued.count} _queued, ${orphanedScan.count} scan tracks`
          );
      }
-
-     // Reset circuit breaker so stale failure state from a previous run doesn't block queuing
-     audioAnalysisCleanupService.resetCircuitBreaker();
 
      // Reset local flags from any previous session
      isPaused = false;
@@ -329,9 +281,6 @@ export async function startUnifiedEnrichmentWorker() {
         startTrackEnrichmentWorker(),
         startPodcastEnrichmentWorker(),
     ]);
-
-    // Start audio completion subscriber (Essentia → vibe queue bridge)
-    startAudioCompletionSubscriber();
 
     // Setup control channel subscription
     await setupControlChannel();
@@ -372,10 +321,9 @@ export async function stopUnifiedEnrichmentWorker() {
         controlSubscriber = null;
     }
 
-    // Close BullMQ Workers, audio subscriber, and Queues
+    // Close BullMQ Workers and Queues
     await Promise.all(activeEnrichmentWorkers.map((w) => w.close())).catch(() => {});
     activeEnrichmentWorkers = [];
-    await stopAudioCompletionSubscriber().catch(() => {});
     await closeEnrichmentQueues().catch(() => {});
 
     // Mark as stopped in state
@@ -396,7 +344,6 @@ export async function stopUnifiedEnrichmentWorker() {
 export async function runFullEnrichment(): Promise<{
     artists: number;
     tracks: number;
-    audioQueued: number;
 }> {
     logger.debug("\n=== FULL ENRICHMENT: Re-enriching everything ===\n");
 
@@ -420,19 +367,6 @@ export async function runFullEnrichment(): Promise<{
             analysisError: null,
         },
     });
-
-    // Reset vibe embeddings so executeVibePhase re-queues everything
-    await prisma.$executeRaw`DELETE FROM track_embeddings`;
-    await prisma.track.updateMany({
-        where: { vibeAnalysisStatus: { not: null } },
-        data: {
-            vibeAnalysisStatus: null,
-            vibeAnalysisRetryCount: 0,
-            vibeAnalysisStatusUpdatedAt: null,
-            vibeAnalysisError: null,
-        },
-    });
-    await enrichmentFailureService.clearAllFailures("vibe");
 
     // Now run the enrichment cycle
     const result = await runEnrichmentCycle(true);
@@ -478,12 +412,8 @@ export async function resetMoodTagsOnly(): Promise<{ count: number }> {
  * Main enrichment cycle
  *
  * Flow:
- * 1. Artist metadata (Last.fm/MusicBrainz) - blocking, required for track enrichment
- * 2. Track tags (Last.fm mood tags) - blocking, quick API calls
- * 3. Audio analysis (Essentia) - NON-BLOCKING, queued to Redis for background processing
- *
- * Steps 1 & 2 must complete before enrichment is "done".
- * Step 3 runs entirely in background via the audio-analyzer Docker container.
+ * 1. Artist metadata (Last.fm/MusicBrainz)
+ * 2. Track tags (Last.fm mood tags)
  *
  * @param fullMode - If true, processes everything. If false, only pending items.
  */
@@ -492,26 +422,12 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
     tracks: number;
     audioQueued: number;
 }> {
-    const emptyResult = { artists: 0, tracks: 0, audioQueued: 0 };
+    const emptyResult = { artists: 0, tracks: 0 };
 
     // Handle stopping state: transition to idle before checking isPaused.
     // This must run first because stop sets both isStopping AND isPaused.
     // If we checked isPaused first, we'd return early and never clear isStopping.
     if (isStopping) {
-        // Reset tracks the Python analyzer claimed but never processed
-        const orphanedAudio = await prisma.track.updateMany({
-            where: { analysisStatus: "processing" },
-            data: { analysisStatus: "pending", analysisStartedAt: null, analysisRetryCount: 0 },
-        });
-        const orphanedVibe = await prisma.track.updateMany({
-            where: { vibeAnalysisStatus: "processing" },
-            data: { vibeAnalysisStatus: "pending", vibeAnalysisStartedAt: null },
-        });
-        if (orphanedAudio.count > 0 || orphanedVibe.count > 0) {
-            logger.info(
-                `[Enrichment] Stop cleanup: reset ${orphanedAudio.count} audio + ${orphanedVibe.count} vibe processing tracks to pending`
-            );
-        }
         await enrichmentStateService.updateState({ status: "idle", currentPhase: null });
         isStopping = false;
         isPaused = false;
@@ -589,41 +505,28 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
 
     let artistsProcessed = 0;
     let tracksProcessed = 0;
-    let audioQueued = 0;
 
     try {
         consecutiveSystemFailures = 0;
 
-        // Run phases sequentially, halting if stopped/paused
         const artistResult = await runPhase("artists", executeArtistsPhase);
         if (artistResult === null) {
-            return { artists: 0, tracks: 0, audioQueued: 0 };
+            return { artists: 0, tracks: 0 };
         }
         artistsProcessed = artistResult;
 
         const trackResult = await runPhase("tracks", executeMoodTagsPhase);
         if (trackResult === null) {
-            return { artists: artistsProcessed, tracks: 0, audioQueued: 0 };
+            return { artists: artistsProcessed, tracks: 0 };
         }
         tracksProcessed = trackResult;
 
-        // Pre-scan: validate audio headers before queuing for analysis
         const scanResult = await runPhase("scan", executeScanPhase);
         if (scanResult === null) {
-            return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued: 0 };
+            return { artists: artistsProcessed, tracks: tracksProcessed };
         }
 
-        const audioResult = await runPhase("audio", executeAudioPhase);
-        if (audioResult === null) {
-            return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued: 0 };
-        }
-        audioQueued = audioResult;
-
-        // Podcast refresh phase -- only runs if subscriptions exist
         await runPhase("podcasts", executePodcastRefreshPhase);
-
-        // Vibe embedding sweep — catches tracks missed by the event-driven subscriber
-        await runPhase("vibe", executeVibePhase);
 
         // Orphaned failure cleanup -- runs at most once per hour, never during stop/pause
         const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -719,36 +622,8 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
         }
 
         if (progress.isFullyComplete) {
-            // Flush final audio counter before going idle -- it may be stale because
-            // the update block above only runs when audioQueued > 0.  Once all tracks
-            // are already queued, that block is skipped while Essentia finishes in
-            // the background, leaving the counter frozen at a mid-run snapshot.
-            await enrichmentStateService.updateState({
-                status: "idle",
-                currentPhase: null,
-                audio: {
-                    total: progress.audioAnalysis.total,
-                    completed: progress.audioAnalysis.completed,
-                    failed: progress.audioAnalysis.failed,
-                    processing: 0,
-                },
-            });
-
-            // Read state once -- used to gate both pre-compute and notification below.
             const stateBeforeNotify = await enrichmentStateService.getState();
 
-            // Pre-compute vibe map projection so it's cached before first page visit.
-            // Gated on completionNotificationSent: once that flag is set the library is
-            // stable and the projection is already cached.  Without this guard,
-            // precomputeProjection() fires every 5-second tick, deletes the cache keys
-            // before UMAP finishes, and the cache is never stable.
-            if (!stateBeforeNotify?.completionNotificationSent) {
-                precomputeProjection().catch(e =>
-                    logger.error("[Enrichment] Vibe map pre-compute failed:", e)
-                );
-            }
-
-            // Clear mixes cache again when fully complete (audio analysis done)
             if (!stateBeforeNotify?.fullCacheCleared) {
                 try {
                     const redisInstance = getRedis();
@@ -787,8 +662,6 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                             const parts: string[] = [];
                             if (failureCounts.artist > 0) parts.push(`${failureCounts.artist} artist(s)`);
                             if (failureCounts.track > 0) parts.push(`${failureCounts.track} track(s)`);
-                            if (failureCounts.audio > 0) parts.push(`${failureCounts.audio} audio analysis`);
-                            if (failureCounts.vibe > 0) parts.push(`${failureCounts.vibe} vibe embedding(s)`);
                             if (failureCounts.podcast > 0) parts.push(`${failureCounts.podcast} podcast(s)`);
 
                             await notificationService.create({
@@ -802,7 +675,7 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                         await notificationService.notifySystem(
                             user.id,
                             "Enrichment Complete",
-                            `Enriched ${progress.artists.completed} artists, ${progress.trackTags.enriched} tracks, ${progress.audioAnalysis.completed} audio analyses`,
+                            `Enriched ${progress.artists.completed} artists, ${progress.trackTags.enriched} tracks`,
                         );
                     }
 
@@ -845,7 +718,7 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
         isRunning = false;
     }
 
-    return { artists: artistsProcessed, tracks: tracksProcessed, audioQueued };
+    return { artists: artistsProcessed, tracks: tracksProcessed };
 }
 
 
@@ -925,88 +798,6 @@ export async function enrichSingleTrack(trackId: string): Promise<void> {
 }
 
 /**
- * Step 3: Queue pending tracks for audio analysis (Essentia)
- */
-async function queueAudioAnalysis(): Promise<number> {
-    const redis = getRedis();
-    const queueLength = await redis.llen("audio:analysis:queue");
-    const MAX_QUEUE_DEPTH = 50;
-
-    if (queueLength >= MAX_QUEUE_DEPTH) {
-        logger.debug(`[Audio Analysis] Queue depth ${queueLength} >= ${MAX_QUEUE_DEPTH}, skipping`);
-        return 0;
-    }
-
-    const batchSize = MAX_QUEUE_DEPTH - queueLength;
-
-    const tracks = await prisma.track.findMany({
-        where: {
-            analysisStatus: "pending",
-            scanStatus: "valid",
-            analysisRetryCount: { lt: 3 }, // matches Python's MAX_RETRIES -- skip tracks the analyzer will ignore
-        },
-        select: {
-            id: true,
-            filePath: true,
-            title: true,
-            duration: true,
-        },
-        take: batchSize,
-        orderBy: { fileModified: "desc" },
-    });
-
-    if (tracks.length === 0) return 0;
-
-    logger.debug(
-        `[Audio Analysis] Queueing ${tracks.length} tracks for Essentia...`,
-    );
-
-    let queued = 0;
-    const pushedIds: string[] = [];
-
-    // Phase 1: Push all tracks to Redis queue
-    for (const track of tracks) {
-        try {
-            await redis.rpush(
-                "audio:analysis:queue",
-                JSON.stringify({
-                    trackId: track.id,
-                    filePath: track.filePath,
-                    duration: track.duration, // Avoids file read in analyzer
-                }),
-            );
-            pushedIds.push(track.id);
-        } catch (error) {
-            logger.error(`   Failed to queue ${track.title}:`, error);
-        }
-    }
-
-    // Phase 2: Batch-mark as queued (single DB round-trip, no per-row deadlock risk)
-    if (pushedIds.length > 0) {
-        try {
-            const result = await prisma.track.updateMany({
-                where: { id: { in: pushedIds }, analysisStatus: "pending" },
-                data: { analysisStatus: "queued" },
-            });
-            queued = result.count;
-        } catch (error: any) {
-            // Deadlock with Python analyzer is non-fatal -- Python already claimed the tracks
-            if (error?.message?.includes("deadlock")) {
-                logger.debug(`[Audio Analysis] Deadlock on batch mark, Python likely claimed tracks`);
-            } else {
-                logger.error(`[Audio Analysis] Failed to mark tracks as queued:`, error);
-            }
-        }
-    }
-
-    if (queued > 0) {
-        logger.debug(` Queued ${queued} tracks for audio analysis`);
-    }
-
-    return queued;
-}
-
-/**
  * Check if enrichment should stop and handle state cleanup if stopping.
  * Returns true if cycle should halt (either stopping or paused).
  */
@@ -1027,7 +818,7 @@ async function shouldHaltCycle(): Promise<boolean> {
  * Run a phase and return result. Returns null if cycle should halt.
  */
 async function runPhase(
-    phaseName: "artists" | "tracks" | "scan" | "audio" | "podcasts" | "vibe",
+    phaseName: "artists" | "tracks" | "scan" | "podcasts",
     executor: () => Promise<number>,
 ): Promise<number | null> {
     await enrichmentStateService.updateState({
@@ -1270,177 +1061,7 @@ async function executeScanPhase(): Promise<number> {
     return validated;
 }
 
-async function executeAudioPhase(): Promise<number> {
-    // Compare completed count to previous cycle (~1 min ago) — a much wider
-    // window than the milliseconds between two counts around cleanupStaleProcessing().
-    const currentCompleted = await prisma.track.count({
-        where: { analysisStatus: "completed" },
-    });
 
-    if (audioLastCycleCompletedCount !== null && currentCompleted > audioLastCycleCompletedCount) {
-        audioAnalysisCleanupService.recordSuccess();
-    }
-    audioLastCycleCompletedCount = currentCompleted;
-
-    const cleanupResult =
-        await audioAnalysisCleanupService.cleanupStaleProcessing();
-    if (cleanupResult.reset > 0 || cleanupResult.permanentlyFailed > 0) {
-        logger.debug(
-            `[Enrichment] Audio analysis cleanup: ${cleanupResult.reset} reset, ${cleanupResult.permanentlyFailed} permanently failed, ${cleanupResult.recovered} recovered`,
-        );
-    }
-
-    // Drain purgatory: tracks stuck as pending/queued but retryCount >= MAX_RETRIES
-    const purgatoryTracks = await prisma.track.findMany({
-        where: {
-            analysisStatus: { in: ["pending", "queued"] },
-            analysisRetryCount: { gte: 3 },
-        },
-        select: { id: true, title: true, filePath: true, analysisRetryCount: true },
-    });
-    if (purgatoryTracks.length > 0) {
-        const recovered: string[] = [];
-        const condemned: typeof purgatoryTracks = [];
-
-        for (const track of purgatoryTracks) {
-            const hasEmbedding = await prisma.$queryRaw<{ count: bigint }[]>`
-                SELECT COUNT(*) as count FROM track_embeddings WHERE track_id = ${track.id}
-            `;
-            if (Number(hasEmbedding[0]?.count) > 0) {
-                recovered.push(track.id);
-            } else {
-                condemned.push(track);
-            }
-        }
-
-        if (recovered.length > 0) {
-            await prisma.track.updateMany({
-                where: { id: { in: recovered } },
-                data: {
-                    analysisStatus: "completed",
-                    analysisError: null,
-                },
-            });
-            logger.info(`[Enrichment] Recovered ${recovered.length} purgatory tracks with existing embeddings`);
-        }
-
-        if (condemned.length > 0) {
-            await prisma.track.updateMany({
-                where: { id: { in: condemned.map(t => t.id) } },
-                data: {
-                    analysisStatus: "permanently_failed",
-                    analysisError: "Exceeded retry limit -- track may be corrupted or unsupported",
-                },
-            });
-            for (const track of condemned) {
-                await enrichmentFailureService.recordFailure({
-                    entityType: "audio",
-                    entityId: track.id,
-                    entityName: track.title,
-                    errorMessage: "Exceeded retry limit -- track may be corrupted or unsupported",
-                    errorCode: "MAX_RETRIES_EXCEEDED",
-                    metadata: { filePath: track.filePath, retryCount: track.analysisRetryCount },
-                });
-            }
-            logger.warn(`[Enrichment] Drained ${condemned.length} purgatory tracks to permanently_failed`);
-        }
-    }
-
-    if (audioAnalysisCleanupService.isCircuitOpen()) {
-        logger.warn(
-            "[Enrichment] Audio analysis circuit breaker OPEN - skipping queue",
-        );
-        return 0;
-    }
-
-    return queueAudioAnalysis();
-}
-
-const VIBE_SWEEP_BATCH_SIZE = 100;
-
-async function executeVibePhase(): Promise<number> {
-    const features = await featureDetection.getFeatures();
-    if (!features.vibeEmbeddings) {
-        return 0;
-    }
-
-    // Defer vibe phase until audio analysis is idle -- both ML models
-    // competing for CPU/GPU causes thrashing and UI flickering.
-    // permanently_failed tracks are terminal and should not block vibe phase
-    const audioInFlight = await prisma.track.count({
-        where: { analysisStatus: { in: ["processing", "pending"] } },
-    });
-    if (audioInFlight > 0) {
-        return 0;
-    }
-
-    // Find tracks with completed audio analysis but no embedding row.
-    // This catches:
-    //   - Tracks orphaned by migration wiping track_embeddings
-    //   - Tracks whose pub/sub completion event was missed (crash, restart)
-    //   - Tracks reset to null/pending by crash recovery
-    //   - Tracks with vibeAnalysisStatus='completed' but no actual embedding (stale status)
-    const tracks = await prisma.$queryRaw<{ id: string; filePath: string }[]>`
-        SELECT t.id, t."filePath"
-        FROM "Track" t
-        LEFT JOIN track_embeddings te ON t.id = te.track_id
-        WHERE te.track_id IS NULL
-          AND t."analysisStatus" = 'completed'
-          AND t."filePath" IS NOT NULL
-          AND (t."vibeAnalysisStatus" IS NULL
-               OR t."vibeAnalysisStatus" = 'pending'
-               OR t."vibeAnalysisStatus" = 'completed')
-          AND (t."vibeAnalysisStatus" IS DISTINCT FROM 'processing')
-        LIMIT ${VIBE_SWEEP_BATCH_SIZE}
-    `;
-
-    if (tracks.length === 0) {
-        return 0;
-    }
-
-    // Ensure vibe queue is resumed -- the audioCompletionSubscriber may have
-    // paused it and the resume timer may have deferred (found audio still active)
-    await vibeQueue.resume().catch(() => {});
-
-    // Clean completed AND failed jobs to prevent jobId dedup from silently
-    // losing re-queued tracks: BullMQ keeps the dedup marker for failed jobs
-    // too, so clearing only "completed" lets one failed job poison a track's
-    // jobId permanently.
-    await vibeQueue.clean(0, 0, 'completed');
-    await vibeQueue.clean(0, 0, 'failed');
-
-    // Reset stale vibeAnalysisStatus for these tracks before queuing
-    const trackIds = tracks.map((t) => t.id);
-    await prisma.track.updateMany({
-        where: { id: { in: trackIds } },
-        data: {
-            vibeAnalysisStatus: "pending",
-            vibeAnalysisError: null,
-        },
-    });
-
-    let queued = 0;
-    for (const track of tracks) {
-        try {
-            await vibeQueue.add(
-                "embed",
-                { trackId: track.id, filePath: track.filePath },
-                { jobId: `vibe-${track.id}` },
-            );
-            queued++;
-        } catch (err: any) {
-            if (!err?.message?.includes("Job already exists")) {
-                logger.warn(`[Enrichment] Failed to queue vibe job for ${track.id}: ${err?.message}`);
-            }
-        }
-    }
-
-    if (queued > 0) {
-        logger.debug(`[Enrichment] Vibe sweep: queued ${queued} tracks for embedding`);
-    }
-
-    return queued;
-}
 
 export async function executePodcastRefreshPhase(): Promise<number> {
     const podcastCount = await prisma.podcast.count();
@@ -1549,53 +1170,7 @@ export async function getEnrichmentProgress() {
         },
     });
 
-    // Audio analysis progress (background task, excludes permanently_failed/corrupt)
-    const audioCompleted = await prisma.track.count({
-        where: { analysisStatus: "completed" },
-    });
-    const audioPending = await prisma.track.count({
-        where: { analysisStatus: "pending" },
-    });
-    const audioQueued = await prisma.track.count({
-        where: { analysisStatus: "queued" },
-    });
-    const audioProcessing = await prisma.track.count({
-        where: { analysisStatus: "processing" },
-    });
-    const audioFailed = await prisma.track.count({
-        where: { analysisStatus: "failed" },
-    });
-
-    // CLAP embedding progress (for vibe similarity)
-    const [clapEmbeddingCount, clapProcessing, clapQueueCounts, clapFailedCount, clapUnembeddedCount] = await Promise.all([
-        prisma.$queryRaw<{ count: bigint }[]>`
-            SELECT COUNT(*) as count FROM track_embeddings
-        `,
-        prisma.track.count({
-            where: { vibeAnalysisStatus: "processing" },
-        }),
-        vibeQueue.getJobCounts("active", "waiting", "delayed"),
-        prisma.track.count({
-            where: { vibeAnalysisStatus: "failed" },
-        }),
-        // Tracks with completed audio but no embedding and not failed
-        prisma.$queryRaw<{ count: bigint }[]>`
-            SELECT COUNT(*) as count
-            FROM "Track" t
-            LEFT JOIN track_embeddings te ON t.id = te.track_id
-            WHERE te.track_id IS NULL
-              AND t."analysisStatus" = 'completed'
-              AND t."filePath" IS NOT NULL
-              AND (t."vibeAnalysisStatus" IS DISTINCT FROM 'failed')
-        `,
-    ]);
-    const clapQueueLength = (clapQueueCounts.active ?? 0) + (clapQueueCounts.waiting ?? 0) + (clapQueueCounts.delayed ?? 0);
-    const clapCompleted = Number(clapEmbeddingCount[0]?.count || 0);
-    const clapFailed = clapFailedCount;
-    const clapUnembedded = Number(clapUnembeddedCount[0]?.count || 0);
-
     // Core enrichment is complete when artists and track tags are done
-    // Audio analysis is separate - it runs in background and doesn't block
     const coreComplete =
         artistPending === 0 && trackTotal - trackTagsEnriched === 0;
 
@@ -1623,46 +1198,9 @@ export async function getEnrichmentProgress() {
                 :   0,
         },
 
-        // Background enrichment (non-blocking, runs in audio-analyzer container)
-        audioAnalysis: {
-            total: trackTotal,
-            completed: audioCompleted,
-            pending: audioPending,
-            queued: audioQueued,
-            processing: audioProcessing,
-            failed: audioFailed,
-            permanentlyFailed: permanentlyFailedCount,
-            progress:
-                trackTotal > 0 ?
-                    Math.round((audioCompleted / trackTotal) * 100)
-                :   0,
-            isBackground: true, // Flag to indicate this runs separately
-        },
-
-        // CLAP embeddings (for vibe similarity search)
-        clapEmbeddings: {
-            total: trackTotal,
-            completed: clapCompleted,
-            pending: Math.max(0, trackTotal - clapCompleted - clapFailed),
-            processing: clapProcessing,
-            failed: clapFailed,
-            progress:
-                trackTotal > 0 ?
-                    Math.round((clapCompleted / trackTotal) * 100)
-                :   0,
-            isBackground: true,
-        },
-
         // Overall status
-        coreComplete, // True when artists + track tags are done
-        isFullyComplete:
-            coreComplete &&
-            audioPending === 0 &&
-            audioQueued === 0 &&
-            audioProcessing === 0 &&
-            clapProcessing === 0 &&
-            clapQueueLength === 0 &&
-            clapUnembedded === 0,
+        coreComplete,
+        isFullyComplete: coreComplete,
     };
 }
 
@@ -1674,7 +1212,6 @@ export async function getEnrichmentProgress() {
 export async function triggerEnrichmentNow(): Promise<{
     artists: number;
     tracks: number;
-    audioQueued: number;
 }> {
     logger.debug("[Enrichment] Triggering immediate enrichment cycle...");
 
@@ -1721,50 +1258,8 @@ export async function triggerEnrichmentNow(): Promise<{
 
      await runEnrichmentCycle(false);
 
-     return { count: result.count };
- }
-
- /**
-  * Re-run audio analysis only
-  * Cleans up stale jobs and queues for audio analysis
-  */
- export async function reRunAudioAnalysisOnly(): Promise<number> {
-     logger.debug("[Enrichment] Re-running audio analysis only...");
-
-     // Reset circuit breaker first so cleanupStaleProcessing doesn't increment a failure
-     // count that we're about to discard anyway
-     audioAnalysisCleanupService.resetCircuitBreaker();
-
-     await audioAnalysisCleanupService.cleanupStaleProcessing();
-
-     // Reset all non-pending tracks so they get re-queued
-     const reset = await prisma.track.updateMany({
-         where: {
-             analysisStatus: { not: "pending" },
-         },
-         data: {
-             analysisStatus: "pending",
-             analysisStartedAt: null,
-             analysisRetryCount: 0,
-         },
-     });
-
-     logger.debug(`[Enrichment] Reset ${reset.count} tracks to pending for audio re-analysis`);
-
-
-     const queued = await queueAudioAnalysis();
-
-     logger.debug(`[Enrichment] Queued ${queued} tracks for audio analysis`);
-
-     // Trigger a cycle immediately so the UI shows running and progress updates
-     await clearPauseState();
-     immediateEnrichmentRequested = true;
-     runEnrichmentCycle(false).catch((err) =>
-         logger.error("[Enrichment] reRunAudioAnalysisOnly cycle error:", err)
-     );
-
-     return queued;
- }
+return { count: result.count };
+  }
 
 export async function resetAllEnrichmentData(): Promise<{
     tracksReset: number;
@@ -1774,65 +1269,21 @@ export async function resetAllEnrichmentData(): Promise<{
 }> {
     const redisInstance = getRedis();
 
-    // === PHASE 1: Stop everything BEFORE touching the database ===
-
-    // Set Node.js flags immediately
     isStopping = false;
     isPaused = false;
     userStopped = true;
     userStoppedWarned = false;
 
-    // Set synchronous gate FIRST -- Python checks this key before any work path,
-    // so even if it hasn't processed the pub/sub pause yet, it won't pick up new work.
-    // This eliminates the pub/sub race that required the old 3-second sleep.
-    await redisInstance.set("audio:analysis:gate", "paused");
-
-    // Flush all queues so Python can't pick up new work
-    await redisInstance.del(
-        "audio:analysis:queue",
-        "audio:scan:queue",
-    );
-
-    // Send pause to Python analyzer AND stop Node.js enrichment state.
-    // Gate is already set above, so this is best-effort for pub/sub notification.
     try {
         await enrichmentStateService.stop();
     } catch {
-        // May throw if no active enrichment state exists -- gate handles it
+        // May throw if no active enrichment state exists
     }
-
-    // === PHASE 2: Wipe all enrichment data ===
 
     const tracksReset = await prisma.track.updateMany({
         data: {
-            analysisStatus: "pending",
-            analysisError: null,
-            analysisRetryCount: 0,
-            analysisStartedAt: null,
-            analysisVersion: null,
-            analysisMode: null,
-            analyzedAt: null,
             scanStatus: "pending",
             scanError: null,
-            vibeAnalysisStatus: null,
-            vibeAnalysisStartedAt: null,
-            vibeAnalysisError: null,
-            vibeAnalysisRetryCount: 0,
-            vibeAnalysisStatusUpdatedAt: null,
-            bpm: null,
-            beatsCount: null,
-            key: null,
-            keyScale: null,
-            keyStrength: null,
-            energy: null,
-            loudness: null,
-            dynamicRange: null,
-            danceability: null,
-            valence: null,
-            arousal: null,
-            instrumentalness: null,
-            acousticness: null,
-            speechiness: null,
             moodHappy: null,
             moodSad: null,
             moodRelaxed: null,
@@ -1840,9 +1291,7 @@ export async function resetAllEnrichmentData(): Promise<{
             moodParty: null,
             moodAcoustic: null,
             moodElectronic: null,
-            danceabilityMl: null,
             moodTags: [],
-            essentiaGenres: [],
             lastfmTags: [],
         },
     });
@@ -1859,29 +1308,15 @@ export async function resetAllEnrichmentData(): Promise<{
     });
     await prisma.similarArtist.deleteMany({});
 
-    await prisma.$executeRaw`TRUNCATE TABLE track_embeddings`;
-
     const moodBucketsDeleted = await prisma.moodBucket.deleteMany({});
 
     const failuresDeleted = await prisma.enrichmentFailure.deleteMany({});
 
-    // === PHASE 3: Clean up remaining Redis state ===
-
-    const keysToDelete = [
-        "audio:worker:heartbeat",
-        "audio:cleanup:last_run",
-        "enrichment:state",
-    ];
-    const vibeKeys = await redisInstance.keys("vibe:map:*");
-    if (vibeKeys.length > 0) keysToDelete.push(...vibeKeys);
-
+    const keysToDelete = ["enrichment:state"];
     if (keysToDelete.length > 0) {
         await redisInstance.del(...keysToDelete);
     }
 
-    // Clean completed/failed jobs from ALL BullMQ queues -- completed job hashes
-    // use jobId-based dedup, so stale entries prevent re-queuing after reset.
-    // Use clean() not obliterate() to preserve queue metadata and running workers.
     for (const queue of [artistQueue, trackQueue, vibeQueue, podcastQueue]) {
         try {
             await queue.clean(0, 0, "completed");
@@ -1893,22 +1328,8 @@ export async function resetAllEnrichmentData(): Promise<{
             // Queue may not exist yet
         }
     }
-    // vibe-embedding is a separate queue not in the shared imports
-    try {
-        const { Queue } = await import("bullmq");
-        const vQueue = new Queue("vibe-embedding", { connection: redisInstance as any });
-        await vQueue.obliterate({ force: true });
-        await vQueue.close();
-    } catch {
-        // Queue may not exist yet
-    }
 
-    audioAnalysisCleanupService.resetCircuitBreaker();
-
-    // State key was deleted above. Don't re-initialize (that sets "running").
-    // Null state = idle/no active enrichment. User must explicitly start.
-
-    logger.info(`[Enrichment] Full reset: ${tracksReset.count} tracks, ${artistsReset.count} artists, embeddings truncated, ${failuresDeleted.count} failures cleared`);
+    logger.info(`[Enrichment] Full reset: ${tracksReset.count} tracks, ${artistsReset.count} artists, ${failuresDeleted.count} failures cleared`);
 
     return {
         tracksReset: tracksReset.count,
