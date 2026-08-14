@@ -191,7 +191,6 @@ type ConfirmTarget =
     | "artists"
     | "moodTags"
     | "audioAnalysis"
-    | "vibeEmbeddings"
     | "allEnrichment"
     | null;
 
@@ -217,12 +216,6 @@ const confirmMeta: Record<
             "This deletes BPM, key, energy, and danceability results for every track. Re-analysis is CPU-intensive and can take a long time on large libraries.",
         confirmText: "Reset Audio Analysis",
     },
-    vibeEmbeddings: {
-        title: "Reset Vibe Embeddings?",
-        message:
-            "This deletes all CLAP audio embeddings used for vibe similarity. Re-embedding is CPU-intensive and can take a long time on large libraries.",
-        confirmText: "Reset Vibe Embeddings",
-    },
     allEnrichment: {
         title: "Reset All Enrichment Data?",
         message:
@@ -232,7 +225,7 @@ const confirmMeta: Record<
 };
 
 export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
-    const { musicCNN, vibeEmbeddings, loading: featuresLoading } = useFeatures();
+    const { musicCNN, loading: featuresLoading } = useFeatures();
     const [syncing, setSyncing] = useState(false);
     const [clearingCaches, setClearingCaches] = useState(false);
     const [reEnriching, setReEnriching] = useState(false);
@@ -623,7 +616,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         if (target === "artists") await execResetArtists();
         else if (target === "moodTags") await execResetMoodTags();
         else if (target === "audioAnalysis") await execResetAudioAnalysis();
-        else if (target === "vibeEmbeddings") await execResetVibeEmbeddings();
         else if (target === "allEnrichment") await execResetEnrichment();
     };
 
@@ -791,18 +783,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         {resettingAudio ? "Resetting..." : "Re-run"}
                                     </button>
                                 </div>
-                            ) : !featuresLoading ? (
-                                <div className="opacity-50 py-2">
-                                    <h4 className="text-sm font-medium text-white/50">Audio Analysis</h4>
-                                    <p className="text-xs font-mono text-white/30 uppercase tracking-wider">Not available (lite mode)</p>
-                                    <p className="text-[10px] font-mono text-white/20 mt-1 uppercase tracking-wider">
-                                        Service not detected -- check setup documentation
-                                    </p>
-                                </div>
                             ) : null}
 
                             {/* CLAP Embeddings */}
-                            {!featuresLoading && vibeEmbeddings ? (
+                            {!featuresLoading ? (
                                 enrichmentProgress.clapEmbeddings && (
                                     <div className="flex items-start gap-2">
                                         <div className="flex-1">
@@ -818,25 +802,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 isBackground={true}
                                             />
                                         </div>
-                                        <button
-                                            onClick={() => setConfirmTarget("vibeEmbeddings")}
-                                            disabled={resettingVibe || syncing || reEnriching || isEnrichmentActive}
-                                            aria-label="Reset and re-run vibe embedding generation"
-                                            className="mt-1 px-3 py-2.5 min-h-[44px] text-[10px] font-mono bg-white/5 border border-white/10 text-white/40 rounded-lg
-                                                hover:bg-white/10 hover:text-white/60 disabled:opacity-30 disabled:cursor-not-allowed transition-all whitespace-nowrap uppercase tracking-wider"
-                                        >
-                                            {resettingVibe ? "Resetting..." : "Re-run"}
-                                        </button>
                                     </div>
                                 )
-                            ) : !featuresLoading ? (
-                                <div className="opacity-50 py-2">
-                                    <h4 className="text-sm font-medium text-white/50">Vibe Similarity</h4>
-                                    <p className="text-xs font-mono text-white/30 uppercase tracking-wider">Not available (lite mode)</p>
-                                    <p className="text-[10px] font-mono text-white/20 mt-1 uppercase tracking-wider">
-                                        Service not detected -- check setup documentation
-                                    </p>
-                                </div>
                             ) : null}
                         </div>
 
@@ -1100,89 +1067,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     </SettingsRow>
                 )}
 
-                {/* Audio Analyzer Workers Control */}
-                {settings.autoEnrichMetadata && !featuresLoading && musicCNN && (
-                    <SettingsRow
-                        label="Audio Analysis Workers"
-                        description="CPU workers for Essentia ML analysis"
-                    >
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="range"
-                                min={1}
-                                max={8}
-                                value={workersConfig?.workers ?? 2}
-                                disabled={isWorkersLoading}
-                                onChange={(e) => {
-                                    debouncedSetWorkers(parseInt(e.target.value));
-                                }}
-                                className={`${sliderClass} disabled:opacity-50 disabled:cursor-not-allowed`}
-                            />
-                            <div className="flex flex-col items-end gap-0.5">
-                                {isWorkersLoading ? (
-                                    <span className="text-xs font-mono text-white/30 w-24 text-right uppercase tracking-wider">
-                                        Loading...
-                                    </span>
-                                ) : (
-                                    <>
-                                        <span className="text-xs font-mono text-white/50 w-24 text-right">
-                                            {workersConfig?.workers ?? 2}{" "}
-                                            workers
-                                        </span>
-                                        {workersConfig && (
-                                            <span className="text-[10px] font-mono text-white/30 w-24 text-right uppercase tracking-wider">
-                                                {workersConfig.cpuCores} cores
-                                                available
-                                            </span>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </SettingsRow>
-                )}
-
-                {/* CLAP Analyzer Workers Control */}
-                {settings.autoEnrichMetadata && !featuresLoading && vibeEmbeddings && (
-                    <SettingsRow
-                        label="Vibe Embedding Workers"
-                        description="CPU workers for CLAP embeddings (vibe similarity)"
-                    >
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="range"
-                                min={1}
-                                max={8}
-                                value={clapWorkersConfig?.workers ?? 2}
-                                disabled={isClapWorkersLoading}
-                                onChange={(e) => {
-                                    debouncedSetClapWorkers(parseInt(e.target.value));
-                                }}
-                                className={`${sliderClass} disabled:opacity-50 disabled:cursor-not-allowed`}
-                            />
-                            <div className="flex flex-col items-end gap-0.5">
-                                {isClapWorkersLoading ? (
-                                    <span className="text-xs font-mono text-white/30 w-24 text-right uppercase tracking-wider">
-                                        Loading...
-                                    </span>
-                                ) : (
-                                    <>
-                                        <span className="text-xs font-mono text-white/50 w-24 text-right">
-                                            {clapWorkersConfig?.workers ?? 2}{" "}
-                                            workers
-                                        </span>
-                                        {clapWorkersConfig && (
-                                            <span className="text-[10px] font-mono text-white/30 w-24 text-right uppercase tracking-wider">
-                                                {clapWorkersConfig.cpuCores} cores
-                                                available
-                                            </span>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </SettingsRow>
-                )}
+                
 
                 {/* Maintenance Operations -- grouped destructive actions */}
                 <div className="mt-6 rounded-lg border border-white/10 overflow-hidden">

@@ -73,7 +73,7 @@ export function OverlayPlayer() {
     const touchStartX = useRef<number | null>(null);
     const [swipeOffset, setSwipeOffset] = useState(0);
     const { handleVibeToggle, isVibeLoading } = useVibeToggle();
-    const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
+    const { loading: featuresLoading } = useFeatures();
     const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ isMobile: isMobileOrTablet });
     const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } = useMediaInfo(500);
 
@@ -397,8 +397,8 @@ export function OverlayPlayer() {
                             )}
                         </button>
 
-                        {/* Vibe button - only when embeddings available */}
-                        {!featuresLoading && vibeEmbeddings && (
+                        {/* Vibe button */}
+                        {!featuresLoading && (
                             <button
                                 onClick={handleVibeToggle}
                                 disabled={!canSkip || isVibeLoading}

@@ -6,14 +6,12 @@ import { useAuth } from "./auth-context";
 
 interface FeaturesState {
     musicCNN: boolean;
-    vibeEmbeddings: boolean;
     audiobookshelfEnabled: boolean;
     loading: boolean;
 }
 
 const defaultState: FeaturesState = {
     musicCNN: false,
-    vibeEmbeddings: false,
     audiobookshelfEnabled: false,
     loading: true,
 };
@@ -32,7 +30,6 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                 .then((features) => {
                     setState({
                         musicCNN: features.musicCNN,
-                        vibeEmbeddings: features.vibeEmbeddings,
                         audiobookshelfEnabled: features.audiobookshelfEnabled,
                         loading: false,
                     });

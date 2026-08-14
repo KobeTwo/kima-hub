@@ -88,7 +88,7 @@ export const FullPlayer = memo(function FullPlayer() {
     const pathname = usePathname();
     const { handleVibeToggle, isVibeLoading } = useVibeToggle();
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
-    const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
+    const { loading: featuresLoading } = useFeatures();
     const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ isMobile: false });
     const { mutateAsync: addToPlaylist } = useAddToPlaylistMutation();
 
@@ -361,8 +361,8 @@ export const FullPlayer = memo(function FullPlayer() {
                                 )}
                             </button>
 
-                            {/* Vibe Mode Toggle - only when embeddings available */}
-                            {!featuresLoading && vibeEmbeddings && (
+                            {/* Vibe Mode Toggle */}
+                            {!featuresLoading && (
                                 <button
                                     onClick={handleVibeToggle}
                                     className={cn(

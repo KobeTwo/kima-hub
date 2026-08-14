@@ -66,7 +66,7 @@ export const MiniPlayer = memo(function MiniPlayer() {
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
-    const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
+    const { loading: featuresLoading } = useFeatures();
     const { handleVibeToggle, isVibeLoading } = useVibeToggle();
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDismissed, setIsDismissed] = useState(false);
@@ -309,8 +309,8 @@ export const MiniPlayer = memo(function MiniPlayer() {
                                     role="group"
                                     aria-label="Playback controls"
                                 >
-                                    {/* Vibe button - only for music tracks when embeddings available */}
-                                    {!featuresLoading && vibeEmbeddings && canSkip && (
+                                    {/* Vibe button - only for music tracks */}
+                                    {!featuresLoading && canSkip && (
                                         <button
                                             onClick={handleVibeToggle}
                                             disabled={isVibeLoading}
@@ -654,8 +654,8 @@ export const MiniPlayer = memo(function MiniPlayer() {
                             )}
                         </button>
 
-                        {/* Vibe Mode Toggle - only when embeddings available */}
-                        {!featuresLoading && vibeEmbeddings && (
+                        {/* Vibe Mode Toggle */}
+                        {!featuresLoading && (
                             <button
                                 onClick={handleVibeToggle}
                                 disabled={!hasMedia || !canSkip || isVibeLoading}
