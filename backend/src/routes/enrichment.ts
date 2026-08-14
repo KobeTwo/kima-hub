@@ -9,7 +9,6 @@ import {
   runFullEnrichment,
   reRunArtistsOnly,
   reRunMoodTagsOnly,
-  reRunAudioAnalysisOnly,
   resetAllEnrichmentData,
   triggerEnrichmentNow,
 } from "../workers/unifiedEnrichment";
@@ -29,7 +28,7 @@ router.use(requireAuth);
 
 /**
  * GET /enrichment/progress
- * Get comprehensive enrichment progress (artists, track tags, audio analysis)
+ * Get comprehensive enrichment progress (artists, track tags)
  */
 router.get("/progress", async (req, res) => {
   try {
@@ -118,7 +117,7 @@ router.post("/full", requireAdmin, async (req, res) => {
     res.json({
       message: "Full enrichment started",
       description:
-        "All artists, track tags, and audio analysis will be re-processed",
+        "All artists and track tags will be re-processed",
     });
   } catch (error) {
     logger.error("Trigger full enrichment error:", error);
@@ -128,7 +127,7 @@ router.post("/full", requireAdmin, async (req, res) => {
 
 /**
  * POST /enrichment/reset-artists
- * Reset only artist enrichment (keeps mood tags and audio analysis intact)
+ * Reset only artist enrichment (keeps mood tags intact)
  * Admin only - selective re-enrichment for large libraries
  */
 router.post("/reset-artists", requireAdmin, async (req, res) => {
@@ -148,7 +147,7 @@ router.post("/reset-artists", requireAdmin, async (req, res) => {
 
 /**
  * POST /enrichment/reset-mood-tags
- * Reset only mood tags (keeps artist metadata and audio analysis intact)
+ * Reset only mood tags (keeps artist metadata intact)
  * Admin only - selective re-enrichment for large libraries
  */
 router.post("/reset-mood-tags", requireAdmin, async (req, res) => {
@@ -163,26 +162,6 @@ router.post("/reset-mood-tags", requireAdmin, async (req, res) => {
   } catch (error) {
     logger.error("Reset mood tags error:", error);
     res.status(500).json({ error: "Failed to reset mood tags" });
-  }
-});
-
-/**
- * POST /enrichment/reset-audio-analysis
- * Reset only audio analysis (keeps artist metadata and mood tags intact)
- * Admin only - selective re-enrichment for large libraries
- */
-router.post("/reset-audio-analysis", requireAdmin, async (req, res) => {
-  try {
-    const queued = await reRunAudioAnalysisOnly();
-
-    res.json({
-      message: "Audio analysis reset",
-      description: `${queued} tracks queued for audio re-analysis`,
-      count: queued,
-    });
-  } catch (error) {
-    logger.error("Reset audio analysis error:", error);
-    res.status(500).json({ error: "Failed to reset audio analysis" });
   }
 });
 
@@ -209,7 +188,7 @@ router.post("/repair-covers", requireAdmin, async (req, res) => {
 
 /**
  * POST /enrichment/reset-all
- * Reset ALL enrichment data -- analysis, embeddings, mood tags, failures
+ * Reset ALL enrichment data -- mood tags, failures
  * Preserves artist metadata (bios, images)
  * Admin only
  */
