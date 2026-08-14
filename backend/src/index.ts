@@ -37,7 +37,6 @@ import notificationsRoutes from "./routes/notifications";
 import browseRoutes from "./routes/browse";
 import releasesRoutes from "./routes/releases";
 import systemRoutes from "./routes/system";
-import systemRoutes from "./routes/system";
 import shareRoutes from "./routes/share";
 import eventsRoutes from "./routes/events";
 import eventsTicketRoutes from "./routes/eventsTicket";

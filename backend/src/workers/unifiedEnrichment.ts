@@ -26,6 +26,8 @@ import { startTrackEnrichmentWorker } from "./trackEnrichmentWorker";
 import { startPodcastEnrichmentWorker } from "./podcastEnrichmentWorker";
 import { enrichmentStateService } from "../services/enrichmentState";
 import { enrichmentFailureService } from "../services/enrichmentFailureService";
+import { musicBrainzService } from "../services/musicbrainz";
+import { trackIdentityService } from "../services/trackIdentity";
 import fs from "fs";
 
 // Configuration
@@ -420,7 +422,6 @@ export async function resetMoodTagsOnly(): Promise<{ count: number }> {
 async function runEnrichmentCycle(fullMode: boolean): Promise<{
     artists: number;
     tracks: number;
-    audioQueued: number;
 }> {
     const emptyResult = { artists: 0, tracks: 0 };
 
@@ -542,10 +543,8 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
             await enrichmentFailureService.cleanupOldResolved();
         }
 
-        const features = await featureDetection.getFeatures();
-
          // Log progress (only if work was done)
-         if (artistsProcessed > 0 || tracksProcessed > 0 || audioQueued > 0) {
+         if (artistsProcessed > 0 || tracksProcessed > 0) {
             const progress = await getEnrichmentProgress();
             logger.debug(`\n[Enrichment Progress]`);
             logger.debug(
@@ -554,17 +553,8 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
             logger.debug(
                 `   Track Tags: ${progress.trackTags.enriched}/${progress.trackTags.total} (${progress.trackTags.progress}%)`,
             );
-            logger.debug(
-                `   Audio Analysis: ${progress.audioAnalysis.completed}/${progress.audioAnalysis.total} (${progress.audioAnalysis.progress}%) [background]`,
-            );
-            if (features.vibeEmbeddings) {
-                logger.debug(
-                    `   Vibe Embeddings: ${progress.clapEmbeddings.completed}/${progress.clapEmbeddings.total} (${progress.clapEmbeddings.progress}%) [background]`,
-                );
-            }
             logger.debug("");
 
-            // Update state with progress
             await enrichmentStateService.updateState({
                 artists: {
                     total: progress.artists.total,
@@ -576,15 +566,8 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                     completed: progress.trackTags.enriched,
                     failed: 0,
                 },
-                audio: {
-                    total: progress.audioAnalysis.total,
-                    completed: progress.audioAnalysis.completed,
-                    failed: progress.audioAnalysis.failed,
-                    processing: progress.audioAnalysis.processing,
-                },
-                completionNotificationSent: false, // Reset flag when new work is processed
+                completionNotificationSent: false,
             });
-
         }
 
         // If everything is complete, mark as idle and send notification (only once)
