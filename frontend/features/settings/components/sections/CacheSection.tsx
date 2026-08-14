@@ -784,27 +784,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     </button>
                                 </div>
                             ) : null}
-
-                            {/* CLAP Embeddings */}
-                            {!featuresLoading ? (
-                                enrichmentProgress.clapEmbeddings && (
-                                    <div className="flex items-start gap-2">
-                                        <div className="flex-1">
-                                            <EnrichmentStage
-                                                icon={Waves}
-                                                label="Vibe Embeddings"
-                                                description="CLAP audio embeddings for similarity search"
-                                                completed={enrichmentProgress.clapEmbeddings.completed}
-                                                total={enrichmentProgress.clapEmbeddings.total}
-                                                progress={enrichmentProgress.clapEmbeddings.progress}
-                                                processing={enrichmentProgress.clapEmbeddings.processing}
-                                                failed={enrichmentProgress.clapEmbeddings.failed}
-                                                isBackground={true}
-                                            />
-                                        </div>
-                                    </div>
-                                )
-                            ) : null}
                         </div>
 
                         {/* Control Buttons */}
