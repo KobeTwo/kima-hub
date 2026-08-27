@@ -1,24 +1,17 @@
--- Enable pgvector extension for vector similarity search
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Enable pgvector extension for vector similarity search (no-op: pgvector removed)
+-- Safe for postgres:16 (no pgvector), existing DBs (vector unavailable), and fresh DBs.
 
--- Create track_embeddings table for storing CLAP embeddings
-CREATE TABLE "track_embeddings" (
-    "track_id" TEXT NOT NULL,
-    "embedding" vector(1024) NOT NULL,
-    "model_version" VARCHAR(50) NOT NULL DEFAULT 'laion-clap-music',
-    "analyzed_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "track_embeddings_pkey" PRIMARY KEY ("track_id")
-);
-
--- Foreign key constraint with CASCADE delete
-ALTER TABLE "track_embeddings" ADD CONSTRAINT "track_embeddings_track_id_fkey"
-    FOREIGN KEY ("track_id") REFERENCES "Track"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- IVFFlat index for approximate nearest neighbor search
--- lists = 224 (sqrt of 50k target tracks)
-CREATE INDEX "track_embeddings_embedding_idx" ON "track_embeddings"
-    USING ivfflat ("embedding" vector_cosine_ops) WITH (lists = 224);
-
--- Index on model_version for filtering by embedding version
-CREATE INDEX "track_embeddings_model_version_idx" ON "track_embeddings"("model_version");
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        -- Already have vector, create tables (no-op since we'll drop them anyway)
+        RAISE NOTICE 'pgvector already installed';
+    ELSE
+        -- Try to create extension; if it fails (postgres:16), that's fine
+        BEGIN
+            CREATE EXTENSION IF NOT EXISTS vector;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'pgvector not available (expected on postgres:16): %', SQLERRM;
+        END;
+    END IF;
+END $$;
