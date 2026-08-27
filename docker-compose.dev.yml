@@ -1,17 +1,15 @@
 # Kima Dev Services
-# Run alongside npm dev servers for audio analysis
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up -d
 #
 # This runs:
 #   - PostgreSQL (port 5433)
-#   - Redis (port 6379)
-#   - Audio Analyzer with ML models (Enhanced vibe matching)
+#   - Redis (port 6380)
 
 services:
     postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         container_name: kima_dev_db
         environment:
             POSTGRES_USER: kima

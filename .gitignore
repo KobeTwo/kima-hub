@@ -1,6 +1,7 @@
 # Environment & Secrets
 .env
 .env.*
+.envrc
 !.env.example
 *.local
 .roomodes
