@@ -9,7 +9,7 @@
 
 services:
     postgres:
-        image: pgvector/pgvector:pg16
+        image: postgres:16
         container_name: kima_dev_db
         environment:
             POSTGRES_USER: kima

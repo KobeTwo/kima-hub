@@ -814,19 +814,7 @@ model PodcastRecommendation {
   @@map("podcast_recommendations")
 }
 
-model TrackEmbedding {
-  track_id      String                @id
-  embedding     Unsupported("vector")
-  model_version String                @default("laion-clap-music") @db.VarChar(50)
-  analyzed_at   DateTime              @default(now()) @db.Timestamptz(6)
-  map_x         Float?
-  map_y         Float?
-  track         Track                 @relation(fields: [track_id], references: [id], onDelete: Cascade)
 
-  @@index([embedding])
-  @@index([model_version])
-  @@map("track_embeddings")
-}
 
 model TrackLyrics {
   track_id      String   @id
