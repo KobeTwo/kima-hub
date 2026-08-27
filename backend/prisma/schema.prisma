@@ -652,7 +652,6 @@ model Track {
   trackGenres                 TrackGenre[]
   transcodedFiles             TranscodedFile[]
   subsonicBookmarks           SubsonicBookmark[]
-  trackEmbedding              TrackEmbedding?
   trackLyrics                 TrackLyrics?
 
   @@index([analysisStatus])
