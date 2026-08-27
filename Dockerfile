@@ -133,17 +133,6 @@ RUN echo "Downloading ML models..." && \
     echo "All ML models downloaded" && \
     ls -lh /app/models/
 
-# Copy audio analyzer scripts
-COPY services/audio-analyzer/analyzer.py /app/audio-analyzer/
-
-# ============================================
-# CLAP ANALYZER SETUP (Vibe Similarity)
-# ============================================
-WORKDIR /app/audio-analyzer-clap
-
-# Copy CLAP analyzer script
-COPY services/audio-analyzer-clap/analyzer.py /app/audio-analyzer-clap/
-
 # Create database readiness check script
 RUN cat > /app/wait-for-db.sh << 'EOF'
 #!/bin/bash
@@ -315,32 +304,6 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 environment=NODE_ENV="production",BACKEND_URL="http://localhost:3006",PORT="3030",MALLOC_ARENA_MAX="1",NODE_OPTIONS="--max-old-space-size=512",TZ="UTC"
 priority=40
-
-[program:audio-analyzer]
-command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer && python3 analyzer.py"
-autostart=true
-autorestart=true
-startretries=3
-startsecs=10
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BATCH_SIZE="10",SLEEP_INTERVAL="5",MAX_ANALYZE_SECONDS="90",BRPOP_TIMEOUT="5",MODEL_IDLE_TIMEOUT="300",NUM_WORKERS="2",THREADS_PER_WORKER="1"
-priority=50
-
-[program:audio-analyzer-clap]
-command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer-clap && python3 analyzer.py"
-autostart=true
-autorestart=true
-startretries=3
-startsecs=30
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",SLEEP_INTERVAL="5",NUM_WORKERS="1",MODEL_IDLE_TIMEOUT="300",INTERNAL_API_SECRET="kima-internal-aio"
-priority=60
 EOF
 
 # Fix Windows line endings in supervisor config
@@ -552,15 +515,6 @@ ENVEOF
 # Optionally disable CLAP audio analyzer (for low-memory deployments)
 if [ "${DISABLE_CLAP:-false}" = "true" ] || [ "${DISABLE_CLAP:-0}" = "1" ]; then
     python3 -c "
-import re
-conf = open('/etc/supervisor/conf.d/kima.conf').read()
-conf = re.sub(
-    r'(\[program:audio-analyzer-clap\][^\[]*autostart=)true',
-    r'\g<1>false',
-    conf,
-    flags=re.DOTALL
-)
-open('/etc/supervisor/conf.d/kima.conf', 'w').write(conf)
 "
     echo "CLAP audio analyzer disabled (DISABLE_CLAP=${DISABLE_CLAP})"
 fi
