@@ -142,12 +142,11 @@ frontend/test-*.tsx
 .vibe/
 **/.vibe/
 .claudeignore
-CLAUDE.md
-AGENTS.md
-
-# Internal Documentation (public docs are in project root)
-docs/
-**/docs/
+# Fork-specific files
+# (upstream ignores these, but this personal fork uses them for agent guidance)
+!AGENTS.md
+!docs/
+!**/docs/
 context_portal/
 issues/
 plans/
