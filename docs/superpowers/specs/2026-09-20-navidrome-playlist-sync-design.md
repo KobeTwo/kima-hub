@@ -59,10 +59,11 @@ Prisma-Migration für `SystemSettings` (Zeile `id = "default"`), neue Felder:
   1. Playlist + Items (per `sort`) via Prisma; nur echte Tracks
   2. Leer → skip + Log; `mixId` gesetzt → skip
   3. Zielname = `navidromeNamePrefix + playlist.name`
-  4. Navidrome `getPlaylists` → Eintrag mit exakt gleichem Namen finden → `deletePlaylist`
-  5. Tracks matchen → `songIds` in Kima-Reihenfolge (Search-Results pro Query pro Run cachen)
-  6. `createPlaylist(name, songIds)` (repeated `songId`-Params)
-  7. Log: `[NavidromeSync] Synced "<name>": 142/145 tracks` + `missing: …` (max. 20)
+  4. Tracks matchen → `songIds` in Kima-Reihenfolge (Search-Results pro Query pro Run cachen)
+  5. **0 Matches → skip** (neue Status `skipped_no_matches`, Navidrome-Kopie bleibt unangetastet)
+  6. Sonst: Navidrome `getPlaylists` → Eintrag mit exakt gleichem Namen finden → `deletePlaylist`
+  7. `createPlaylist(name, songIds)` (repeated `songId`-Params)
+  8. Log: `[NavidromeSync] Synced "<name>": 142/145 tracks` + `missing: …` (max. 20)
 - `syncAll()`: alle Playlisten mit `mixId = null` (manueller Trigger)
 - `testConnection(url, user, password)`: `getPlaylists`-Aufruf, ok/Fehler (für UI-Button)
 - Subsonic-Calls: POST `{url}/rest/<method>.view`, form-encoded (`URLSearchParams`, wiederholte Keys), `v=1.16.1`, `c=kima-navidrome-sync`, `f=json`, `u`/`p`; Status != ok → Fehler
@@ -95,6 +96,7 @@ Prisma-Migration für `SystemSettings` (Zeile `id = "default"`), neue Felder:
 
 - Alle Sync-Fehler: Kima-Logger mit `[NavidromeSync]`-Prefix; nie nach außen thrown.
 - Navidrome down → Log; nächster 60s-Tick / manueller Trigger versucht es erneut (kein Retry-Loop).
+- Gescheiterte Syncs werden vom nächsten 60s-Tick erneut versucht (max. ein Retry pro Tick, kein Retry-Loop).
 - Fehlkonfiguration (enabled, aber unvollständig) → Log, Inaktiv.
 - **Lösch-Semantik (bewusst unsymmetrisch):** Kima-Playlist löschen → Navidrome-Kopie bleibt stehen (keine automatischen Löschungen in Navidrome → kein Datenverlust bei Namens-Collisionen). Umbenennen in Kima erzeugt eine neue Navidrome-Playlist; die alte bleibt.
 

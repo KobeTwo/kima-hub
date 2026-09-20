@@ -101,8 +101,7 @@ const systemSettingsSchema = z.object({
 
   // Navidrome Sync
   navidromeSyncEnabled: z.boolean().optional(),
-  navidromeUrl: z.union([z.string().url(), z.literal("")]).nullable()
-    .optional(),
+  navidromeUrl: z.string().nullable().optional(),
   navidromeUser: z.string().nullable().optional(),
   navidromePassword: z.string().nullable().optional(),
   navidromeNamePrefix: z.string().optional(),
@@ -847,7 +846,7 @@ router.post("/test-navidrome", async (req, res) => {
         .json({ error: "URL, username and password are required" });
     }
 
-    logger.debug("[NAVIDROME-TEST] Testing connection to:", url);
+    logger.debug("[NavidromeSync] Testing connection to:", url);
 
     const { navidromeSync } = await import("../services/navidromeSync");
     const result = await navidromeSync.testConnection(url, username, password);

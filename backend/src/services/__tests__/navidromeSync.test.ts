@@ -83,16 +83,10 @@ const PLAYLIST = {
     ],
 };
 
+// Call order (match-before-write): search3 t1, search3 t2,
+// getPlaylists, deletePlaylist, createPlaylist
 function playlistWithExistingNavidromeCopy() {
     mockedAxios.post
-        .mockResolvedValueOnce(
-            ok({
-                playlists: {
-                    playlist: [{ id: "np-9", name: "Road Trip" }],
-                },
-            })
-        )
-        .mockResolvedValueOnce(ok()) // deletePlaylist
         .mockResolvedValueOnce(
             ok({
                 searchResult3: {
@@ -124,6 +118,14 @@ function playlistWithExistingNavidromeCopy() {
                 },
             })
         )
+        .mockResolvedValueOnce(
+            ok({
+                playlists: {
+                    playlist: [{ id: "np-9", name: "Road Trip" }],
+                },
+            })
+        )
+        .mockResolvedValueOnce(ok()) // deletePlaylist
         .mockResolvedValueOnce(ok()); // createPlaylist
 }
 
@@ -150,8 +152,11 @@ describe("navidromeSync", () => {
 
             expect(mockedAxios.post).toHaveBeenCalledTimes(5);
             const urls = mockedAxios.post.mock.calls.map((c) => c[0] as string);
-            expect(urls[0]).toBe("http://navidrome:4533/rest/getPlaylists.view");
-            expect(urls[1]).toBe("http://navidrome:4533/rest/deletePlaylist.view");
+            // match-before-write: search3, search3, getPlaylists, deletePlaylist, createPlaylist
+            expect(urls[0]).toBe("http://navidrome:4533/rest/search3.view");
+            expect(urls[1]).toBe("http://navidrome:4533/rest/search3.view");
+            expect(urls[2]).toBe("http://navidrome:4533/rest/getPlaylists.view");
+            expect(urls[3]).toBe("http://navidrome:4533/rest/deletePlaylist.view");
             expect(urls[4]).toBe("http://navidrome:4533/rest/createPlaylist.view");
 
             const createBody = mockedAxios.post.mock.calls[4][1] as URLSearchParams;
@@ -171,9 +176,6 @@ describe("navidromeSync", () => {
                 PLAYLIST as never
             );
             mockedAxios.post
-                .mockResolvedValueOnce(
-                    ok({ playlists: { playlist: [] } })
-                )
                 .mockResolvedValueOnce(
                     ok({
                         searchResult3: {
@@ -202,6 +204,9 @@ describe("navidromeSync", () => {
                             ],
                         },
                     })
+                )
+                .mockResolvedValueOnce(
+                    ok({ playlists: { playlist: [] } })
                 )
                 .mockResolvedValueOnce(ok());
 
@@ -255,11 +260,10 @@ describe("navidromeSync", () => {
             mockedPrisma.playlist.findUnique.mockResolvedValue(
                 PLAYLIST as never
             );
-            // Call order (spec): getPlaylists, search3 "Wonderwall Oasis"
-            // (t1), search3 "No Signal The Weeknd" (t2 q1, empty),
-            // search3 "No Signal" (t2 q2, empty), createPlaylist
+            // Call order (match-before-write): search3 "Wonderwall Oasis"
+            // (t1 hit), search3 "No Signal The Weeknd" (t2 q1, empty),
+            // search3 "No Signal" (t2 q2, empty), getPlaylists, createPlaylist
             mockedAxios.post
-                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(
                     ok({ searchResult3: { song: [{ id: "w-1", title: "Wonderwall", artist: "Oasis", isrc: ["USX120400001"], duration: 228 }] } })
                 )
@@ -269,6 +273,7 @@ describe("navidromeSync", () => {
                 .mockResolvedValueOnce(
                     ok({ searchResult3: { song: [] } }) // t2 second query
                 )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(ok()); // createPlaylist
 
             const result = await navidromeSync.syncPlaylist("pl-1");
@@ -304,7 +309,6 @@ describe("navidromeSync", () => {
                 PLAYLIST as never
             );
             mockedAxios.post
-                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(
                     ok({
                         searchResult3: {
@@ -323,13 +327,14 @@ describe("navidromeSync", () => {
                         },
                     })
                 )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(ok());
 
             const result = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("synced");
             expect(result.name).toBe("KIMA Road Trip");
-            // no existing copy -> 4 calls: getPlaylists, search3, search3, createPlaylist
+            // no existing copy -> 4 calls: search3, search3, getPlaylists, createPlaylist
             const createBody =
                 mockedAxios.post.mock.calls[3][1] as URLSearchParams;
             expect(createBody.get("name")).toBe("KIMA Road Trip");
@@ -347,12 +352,13 @@ describe("navidromeSync", () => {
             expect(mockedAxios.post).not.toHaveBeenCalled();
         });
 
-        it("creates an empty copy when no track matches (mirror semantics)", async () => {
+        it("leaves the existing copy untouched when no track matches", async () => {
             mockedPrisma.playlist.findUnique.mockResolvedValue(
                 PLAYLIST as never
             );
+            // 4 search3 calls (2 queries per track), all empty; no write
+            // phase (getPlaylists/delete/create) must occur.
             mockedAxios.post
-                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(
                     ok({ searchResult3: { song: [] } })
                 )
@@ -364,17 +370,21 @@ describe("navidromeSync", () => {
                 )
                 .mockResolvedValueOnce(
                     ok({ searchResult3: { song: [] } })
-                )
-                .mockResolvedValueOnce(ok()); // createPlaylist
+                );
 
             const result = await navidromeSync.syncPlaylist("pl-1");
 
-            expect(result.status).toBe("synced");
+            expect(result.status).toBe("skipped_no_matches");
             expect(result.matched).toBe(0);
             expect(result.missing).toHaveLength(2);
-            const createBody =
-                mockedAxios.post.mock.calls[5][1] as URLSearchParams;
-            expect(Array.from(createBody.getAll("songId"))).toEqual([]);
+            expect(mockedAxios.post).toHaveBeenCalledTimes(4);
+            const urls = mockedAxios.post.mock.calls.map((c) => c[0] as string);
+            expect(urls).not.toContain(
+                "http://navidrome:4533/rest/getPlaylists.view"
+            );
+            expect(urls).not.toContain(
+                "http://navidrome:4533/rest/createPlaylist.view"
+            );
         });
     });
 
@@ -440,10 +450,10 @@ describe("navidromeSync", () => {
                     name: "Other",
                     items: [],
                 } as never);
-            // pl-1: getPlaylists, search3 (t1 "Wonderwall Oasis"),
-            // search3 (t2 "No Signal The Weeknd"), createPlaylist; pl-2 empty
+            // pl-1 (match-before-write): search3 (t1 "Wonderwall Oasis"),
+            // search3 (t2 "No Signal The Weeknd"), getPlaylists, createPlaylist;
+            // pl-2 empty
             mockedAxios.post
-                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(
                     ok({
                         searchResult3: {
@@ -462,6 +472,7 @@ describe("navidromeSync", () => {
                         },
                     })
                 )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(ok());
 
             const results = await navidromeSync.syncAll();
@@ -478,9 +489,30 @@ describe("navidromeSync", () => {
             mockedPrisma.playlist.findUnique.mockResolvedValue(
                 PLAYLIST as never
             );
-            mockedAxios.post.mockRejectedValueOnce(
-                new Error("Navidrome getPlaylists failed: 500")
-            );
+            // Matching succeeds; createPlaylist is rejected.
+            mockedAxios.post
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "w-1", title: "Wonderwall", artist: "Oasis", isrc: ["USX120400001"], duration: 228 },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "n-1", title: "No Signal", artist: "The Weeknd", duration: 200 },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockRejectedValueOnce(
+                    new Error("Navidrome createPlaylist failed: 500")
+                );
 
             const result = await navidromeSync.syncPlaylist("pl-1");
 
@@ -549,6 +581,67 @@ describe("navidromeSync", () => {
 
             resolveFindUnique!(PLAYLIST);
             await first;
+        });
+
+        it("retries a failed playlist on the next 60s tick", async () => {
+            mockedPrisma.playlist.findUnique.mockResolvedValue(
+                PLAYLIST as never
+            );
+            // Tick 1: matching succeeds, createPlaylist fails (Navidrome down)
+            // → status "error" → re-queued for the next tick.
+            mockedAxios.post
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "w-1", title: "Wonderwall", artist: "Oasis", duration: 228, isrc: ["USX120400001"] },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "n-1", title: "No Signal", artist: "The Weeknd", duration: 200 },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockRejectedValueOnce(
+                    new Error("Navidrome createPlaylist failed: 503")
+                )
+                // Tick 2: Navidrome is back — full successful sync
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "w-1", title: "Wonderwall", artist: "Oasis", duration: 228, isrc: ["USX120400001"] },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "n-1", title: "No Signal", artist: "The Weeknd", duration: 200 },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockResolvedValueOnce(ok());
+
+            navidromeSync.markDirty("pl-1");
+            await jest.advanceTimersByTimeAsync(60_000); // tick 1 → error → re-queued
+            await jest.advanceTimersByTimeAsync(60_000); // tick 2 → retry succeeds
+
+            const getPlaylistsCalls = mockedAxios.post.mock.calls.filter(
+                (c) => (c[0] as string).includes("getPlaylists")
+            );
+            expect(getPlaylistsCalls).toHaveLength(2);
         });
     });
 });

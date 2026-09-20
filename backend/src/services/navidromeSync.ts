@@ -24,6 +24,7 @@ export interface SyncResult {
         | "skipped_mix"
         | "skipped_not_found"
         | "skipped_not_configured"
+        | "skipped_no_matches"
         | "error";
     matched?: number;
     total?: number;
@@ -80,13 +81,18 @@ class NavidromeSyncService {
             if (ids.length === 0) return;
             logger.info(`[NavidromeSync] flushing ${ids.length} playlist(s)`);
             for (const id of ids) {
+                let result: SyncResult | undefined;
                 try {
-                    await this.syncPlaylist(id);
+                    result = await this.syncPlaylist(id);
                 } catch (error: any) {
                     logger.error(
                         `[NavidromeSync] Unexpected error for ${id}:`,
                         error
                     );
+                }
+                if (result?.status === "error") {
+                    // Spec §5: the next 60s tick retries failed playlists.
+                    this.dirty.add(id);
                 }
             }
         } finally {
@@ -194,23 +200,11 @@ class NavidromeSyncService {
                 f: "json",
             };
 
-            // Spec order: delete the existing copy BEFORE matching, so
-            // getPlaylists/deletePlaylist precede the search3 calls.
+            // Match first, write second: a total matching failure must not
+            // delete the existing Navidrome copy.
             const targetName = `${
                 settings.navidromeNamePrefix || ""
             }${playlist.name}`;
-            const existingId = await this.findPlaylistIdByName(
-                targetName,
-                base,
-                auth
-            );
-            if (existingId) {
-                await this.navidromeCall(
-                    "deletePlaylist",
-                    { ...auth, id: existingId },
-                    base
-                );
-            }
 
             const songIds: string[] = [];
             const missing: string[] = [];
@@ -243,6 +237,33 @@ class NavidromeSyncService {
                         `${artistName} - ${item.track.title} (${error?.message || "search error"})`
                     );
                 }
+            }
+
+            if (songIds.length === 0) {
+                logger.warn(
+                    `[NavidromeSync] Skipping "${targetName}": no tracks matched — existing Navidrome copy left untouched`
+                );
+                return {
+                    playlistId,
+                    name: targetName,
+                    status: "skipped_no_matches",
+                    matched: 0,
+                    total: playlist.items.length,
+                    missing,
+                };
+            }
+
+            const existingId = await this.findPlaylistIdByName(
+                targetName,
+                base,
+                auth
+            );
+            if (existingId) {
+                await this.navidromeCall(
+                    "deletePlaylist",
+                    { ...auth, id: existingId },
+                    base
+                );
             }
 
             await this.navidromeCall(
@@ -312,8 +333,12 @@ class NavidromeSyncService {
         const s = (await getSystemSettings()) as Settings | null;
         if (!s) return null;
         if (!s.navidromeSyncEnabled) return null;
-        if (!s.navidromeUrl || !s.navidromeUser || !s.navidromePassword)
+        if (!s.navidromeUrl || !s.navidromeUser || !s.navidromePassword) {
+            logger.warn(
+                "[NavidromeSync] enabled but incomplete config (url/user/password missing) — inactive"
+            );
             return null;
+        }
         return s;
     }
 
