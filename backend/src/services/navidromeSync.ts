@@ -36,13 +36,14 @@ type Settings = {
     navidromeUrl: string | null;
     navidromeUser: string | null;
     navidromePassword: string | null;
-    navidromeNamePrefix: string | null;
+    navidromeNamePrefix: string;
 };
 
 class NavidromeSyncService {
     private dirty = new Set<string>();
     private timer: NodeJS.Timeout | null = null;
     private flushing = false;
+    private inFlight = new Map<string, Promise<SyncResult>>();
 
     /** Register a playlist for the next flush. Never throws. */
     markDirty(playlistId: string): void {
@@ -107,7 +108,21 @@ class NavidromeSyncService {
         return results;
     }
 
-    async syncPlaylist(playlistId: string): Promise<SyncResult> {
+    // Non-async on purpose: a second call made while the first is in flight
+    // must receive the very same promise object (see in-flight dedupe test).
+    syncPlaylist(playlistId: string): Promise<SyncResult> {
+        const existing = this.inFlight.get(playlistId);
+        if (existing) return existing;
+        const run: Promise<SyncResult> = this.doSyncPlaylist(playlistId).finally(
+            () => {
+                this.inFlight.delete(playlistId);
+            }
+        );
+        this.inFlight.set(playlistId, run);
+        return run;
+    }
+
+    private async doSyncPlaylist(playlistId: string): Promise<SyncResult> {
         try {
             const settings = await this.getSettings();
             if (!settings) {
@@ -330,7 +345,8 @@ class NavidromeSyncService {
             { ...auth, query, songCount: "50", artistCount: "0", albumCount: "0" },
             base
         );
-        const songs: any[] = resp?.searchResult3?.song || [];
+        const songsRaw = resp?.searchResult3?.song;
+        const songs: any[] = Array.isArray(songsRaw) ? songsRaw : [];
         return songs.map((s: any) => ({
             id: String(s.id),
             title: s.title || "",
@@ -379,7 +395,9 @@ class NavidromeSyncService {
         if (!subsonic || subsonic.status !== "ok") {
             const err = subsonic?.error;
             throw new Error(
-                `Navidrome ${method} failed: ${err?.message || JSON.stringify(subsonic)}`
+                `Navidrome ${method} failed: ${
+                    err?.message || `HTTP ${response.status} with unexpected body`
+                }`
             );
         }
         return subsonic;

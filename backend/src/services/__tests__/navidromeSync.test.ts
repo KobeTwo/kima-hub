@@ -334,6 +334,71 @@ describe("navidromeSync", () => {
                 mockedAxios.post.mock.calls[3][1] as URLSearchParams;
             expect(createBody.get("name")).toBe("KIMA Road Trip");
         });
+
+        it("skips when enabled but credentials are incomplete", async () => {
+            mockedSettings.mockResolvedValue(
+                { ...SETTINGS, navidromePassword: null } as never
+            );
+            mockedPrisma.playlist.findUnique.mockResolvedValue(
+                PLAYLIST as never
+            );
+            const result = await navidromeSync.syncPlaylist("pl-1");
+            expect(result.status).toBe("skipped_not_configured");
+            expect(mockedAxios.post).not.toHaveBeenCalled();
+        });
+
+        it("creates an empty copy when no track matches (mirror semantics)", async () => {
+            mockedPrisma.playlist.findUnique.mockResolvedValue(
+                PLAYLIST as never
+            );
+            mockedAxios.post
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockResolvedValueOnce(
+                    ok({ searchResult3: { song: [] } })
+                )
+                .mockResolvedValueOnce(
+                    ok({ searchResult3: { song: [] } })
+                )
+                .mockResolvedValueOnce(
+                    ok({ searchResult3: { song: [] } })
+                )
+                .mockResolvedValueOnce(
+                    ok({ searchResult3: { song: [] } })
+                )
+                .mockResolvedValueOnce(ok()); // createPlaylist
+
+            const result = await navidromeSync.syncPlaylist("pl-1");
+
+            expect(result.status).toBe("synced");
+            expect(result.matched).toBe(0);
+            expect(result.missing).toHaveLength(2);
+            const createBody =
+                mockedAxios.post.mock.calls[5][1] as URLSearchParams;
+            expect(Array.from(createBody.getAll("songId"))).toEqual([]);
+        });
+    });
+
+    describe("concurrency", () => {
+        it("dedupes concurrent syncPlaylist calls for the same playlist", async () => {
+            let resolveFindUnique: (v: unknown) => void;
+            const gate = new Promise((res) => {
+                resolveFindUnique = res;
+            });
+            mockedPrisma.playlist.findUnique.mockReturnValue(gate as never);
+            playlistWithExistingNavidromeCopy();
+
+            const first = navidromeSync.syncPlaylist("pl-1");
+            const second = navidromeSync.syncPlaylist("pl-1");
+
+            // second call must share the in-flight promise
+            expect(second).toBe(first);
+
+            resolveFindUnique!(PLAYLIST);
+            const [r1, r2] = await Promise.all([first, second]);
+            expect(r1).toBe(r2);
+            // exactly one execution: getPlaylists, delete, 2x search3, create
+            expect(mockedAxios.post).toHaveBeenCalledTimes(5);
+        });
     });
 
     describe("testConnection", () => {
@@ -434,6 +499,7 @@ describe("navidromeSync", () => {
             // Stale fake-timer handles are discarded on useRealTimers();
             // reset the service's timer state so the next test creates a
             // fresh interval in its own fake-timer environment.
+            // NOTE: ordering matters — this block must run while fake timers are being restored; do not add fake-timer tests after a real-timer test without resetting timer state here.
             (navidromeSync as unknown as { timer: unknown }).timer = null;
             (navidromeSync as unknown as { dirty: Set<string> }).dirty.clear();
         });
