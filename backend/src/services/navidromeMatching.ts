@@ -113,6 +113,45 @@ export function buildSearchQueries(title: string, artist: string): string[] {
 const MATCH_THRESHOLD = 70;
 const DURATION_TOLERANCE_SECONDS = 4;
 
+function normalizeIsrcs(isrcs: string[] | undefined): Set<string> {
+  return new Set((isrcs ?? []).map((v) => v.trim().toUpperCase()).filter(Boolean));
+}
+
+function durationDelta(song: NavidromeSong, targetDuration: number): number {
+  return Math.abs((song.duration ?? 0) - targetDuration);
+}
+
+function pickIsrcWinner(
+  songs: NavidromeSong[],
+  targetIsrcs: Set<string>,
+  targetDuration: number,
+): NavidromeSong | null {
+  const candidates = songs.filter((song) => {
+    const songIsrcs = normalizeIsrcs(song.isrc);
+    for (const isrc of songIsrcs) {
+      if (targetIsrcs.has(isrc)) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  let best = candidates[0];
+  let bestDelta = durationDelta(candidates[0], targetDuration);
+  for (const song of candidates.slice(1)) {
+    const delta = durationDelta(song, targetDuration);
+    if (delta < bestDelta) {
+      best = song;
+      bestDelta = delta;
+    }
+  }
+  return best;
+}
+
 export function pickBestMatch(
   songs: NavidromeSong[],
   target: { title: string; artist?: string; duration?: number; isrcs?: string[] },
@@ -121,17 +160,24 @@ export function pickBestMatch(
     return null;
   }
 
+  const targetDuration = target.duration ?? 0;
+
+  const targetIsrcs = normalizeIsrcs(target.isrcs);
+  if (targetIsrcs.size > 0) {
+    const isrcWinner = pickIsrcWinner(songs, targetIsrcs, targetDuration);
+    if (isrcWinner) {
+      return isrcWinner;
+    }
+  }
+
   const targetTitle = normalizeForMatch(target.title);
   const targetArtists = target.artist
     ? splitArtists(target.artist).map((a) => normalizeForMatch(a))
     : [];
-  const targetDuration = target.duration ?? 0;
-  const targetIsrcs = new Set(
-    (target.isrcs ?? []).map((v) => v.trim().toUpperCase()).filter(Boolean),
-  );
 
   let best: NavidromeSong | null = null;
   let bestScore = 0;
+  let bestDelta = 0;
 
   for (const song of songs) {
     const title = normalizeForMatch(song.title);
@@ -142,15 +188,6 @@ export function pickBestMatch(
     }
 
     let score = 0;
-
-    if (targetIsrcs.size > 0) {
-      for (const v of (song.isrc ?? []).map((x) => x.trim().toUpperCase())) {
-        if (v && targetIsrcs.has(v)) {
-          score += 100;
-          break;
-        }
-      }
-    }
 
     if (title === targetTitle) {
       score += 100;
@@ -164,13 +201,15 @@ export function pickBestMatch(
       }
     }
 
-    if (Math.abs((song.duration ?? 0) - targetDuration) <= DURATION_TOLERANCE_SECONDS) {
+    const delta = durationDelta(song, targetDuration);
+    if (delta <= DURATION_TOLERANCE_SECONDS) {
       score += 20;
     }
 
-    if (score > bestScore) {
-      bestScore = score;
+    if (score > bestScore || (best !== null && score === bestScore && delta < bestDelta)) {
       best = song;
+      bestScore = score;
+      bestDelta = delta;
     }
   }
 

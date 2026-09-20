@@ -104,4 +104,47 @@ describe("pickBestMatch", () => {
     ];
     expect(pickBestMatch(songs, target)).toBeNull();
   });
+
+  it("ISRC match wins even when another candidate has a higher fuzzy score", () => {
+    const songs: NavidromeSong[] = [
+      { id: "no-isrc", title: "Wonderwall", artist: "Oasis", duration: 228 },
+      {
+        id: "isrc",
+        title: "Wonderwall Mix",
+        artist: "Someone Else",
+        duration: 400,
+        isrc: ["USX120400001"],
+      },
+    ];
+    const result = pickBestMatch(songs, {
+      title: "Wonderwall",
+      artist: "Oasis",
+      duration: 228,
+      isrcs: ["USX120400001"],
+    });
+    expect(result?.id).toBe("isrc");
+  });
+
+  it("falls back to fuzzy scoring when no candidate shares an ISRC", () => {
+    const songs: NavidromeSong[] = [
+      { id: "1", title: "Wrong Song", artist: "Nobody", duration: 100, isrc: ["AAA"] },
+      { id: "2", title: "Wonderwall", artist: "Oasis", duration: 228, isrc: ["BBB"] },
+    ];
+    const result = pickBestMatch(songs, {
+      title: "Wonderwall",
+      artist: "Oasis",
+      duration: 228,
+      isrcs: ["ZZZ999"],
+    });
+    expect(result?.id).toBe("2");
+  });
+
+  it("breaks score ties by closer duration", () => {
+    const songs: NavidromeSong[] = [
+      { id: "far", title: "Wonderwall", artist: "Oasis", duration: 232 },
+      { id: "close", title: "Wonderwall", artist: "Oasis", duration: 228 },
+    ];
+    const result = pickBestMatch(songs, target);
+    expect(result?.id).toBe("close");
+  });
 });
