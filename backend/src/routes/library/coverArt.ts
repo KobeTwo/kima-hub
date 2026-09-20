@@ -157,8 +157,8 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
       if (decodedUrl.startsWith("native:")) {
         const nativePath = decodedUrl.replace("native:", "");
         const coversBase = path.resolve(
-          config.music.transcodeCachePath,
-          "../covers",
+          config.music.cacheDir,
+          "covers",
         );
         const coverCachePath = validateCoverPath(coversBase, nativePath);
 
@@ -192,8 +192,8 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
       if (decodedId.startsWith("native:")) {
         const nativePath = decodedId.replace("native:", "");
         const coversBase = path.resolve(
-          config.music.transcodeCachePath,
-          "../covers",
+          config.music.cacheDir,
+          "covers",
         );
         const coverCachePath = validateCoverPath(coversBase, nativePath);
 

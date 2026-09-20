@@ -37,6 +37,7 @@ try {
 // Music config - will be initialized async
 let musicConfig: MusicConfig = {
     musicPath: process.env.MUSIC_PATH || "/music",
+    cacheDir: process.env.CACHE_DIR || "./cache",
 };
 
 // Initialize music configuration asynchronously

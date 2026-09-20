@@ -10,6 +10,7 @@ const execAsync = promisify(exec);
 
 export interface MusicConfig {
     musicPath: string;
+    cacheDir: string;
 }
 
 /**
@@ -22,6 +23,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
     // Priority: Environment variable > Database setting > Default
     // Env var takes precedence to support Docker deployments where mount point is fixed
     let musicPath = process.env.MUSIC_PATH || settings?.musicPath || "/music";
+    const cacheDir = process.env.CACHE_DIR || "./cache";
 
     // Docker safety: If configured path doesn't exist but /music does, use /music
     // This handles users passing host .env files to Docker with host paths
@@ -93,5 +95,6 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
 
     return {
         musicPath,
+        cacheDir,
     };
 }
