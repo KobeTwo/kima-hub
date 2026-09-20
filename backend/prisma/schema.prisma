@@ -582,6 +582,11 @@ model SystemSettings {
   registrationOpen            Boolean  @default(false)
   lidarrQualityProfileId      Int?
   lidarrMetadataProfileId     Int?
+  navidromeSyncEnabled        Boolean  @default(false)
+  navidromeUrl                String?
+  navidromeUser               String?
+  navidromePassword           String?
+  navidromeNamePrefix         String   @default("")
 }
 
 model Track {
