@@ -311,14 +311,6 @@ async function main() {
     );
     server.keepAliveTimeout = 65_000;  // > common LB idle of 60s
     server.headersTimeout = 70_000;    // must exceed keepAliveTimeout
-    // Do NOT set server.timeout: it fires on socket INACTIVITY, and a paused
-    // audio stream is inactive (no bytes flow while backpressured), so it would
-    // destroy the stream's connection after the timeout and force a reconnect on
-    // resume -- a regression seen on both web and iOS after a multi-minute pause.
-    // Reap genuinely dead/half-open peers (mobile network gone without FIN/RST)
-    // via TCP keepalive instead: the OS drops the socket once probes fail, while
-    // a paused-but-alive stream keeps answering probes and stays connected.
-    server.timeout = 0;
     server.on("connection", (socket) => {
         socket.setKeepAlive(true, config.socketKeepAliveDelayMs);
     });
