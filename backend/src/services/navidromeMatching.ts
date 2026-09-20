@@ -1,220 +1,175 @@
+/**
+ * Pure matching utilities for mapping Kima tracks to Navidrome songs.
+ * Port of the proven matching from usenet/spotify_importer/app.py.
+ * No I/O — unit-testable in isolation.
+ */
+
 export interface NavidromeSong {
-  id: string;
-  title: string;
-  artist: string;
-  artistId?: string;
-  album?: string;
-  isrc?: string[];
-  duration?: number;
+    id: string;
+    title: string;
+    artist?: string;
+    album?: string;
+    duration?: number;
+    isrc?: string[];
 }
 
-export interface RgCoverInfo {
-  isrcs: string[];
-  artists: string[];
-  album: string;
-  coverPath: string;
-  totalTracks: number;
+export interface MatchTarget {
+    title: string;
+    artist: string;
+    album?: string;
+    duration?: number;
+    isrc?: string | null;
 }
 
-const SUFFIX_PATTERNS: RegExp[] = [
-  /\s*-\s*(\d{4}\s*)?remaster(?:ed)?\s*$/i,
-  /\s*-\s*remaster(?:ed)?\s*\d{4}\s*$/i,
-  /\s*-\s*(deluxe|expanded|anniversary|special)\s+edition\s*$/i,
-  /\s*-\s*(mono|stereo)\s+version\s*$/i,
-  /\s*-\s*\d{4}\s+version\s*$/i,
-  /\s*-\s*version\s*$/i,
-  /\s*-\s*(radio|album|single)\s+edit\s*$/i,
-];
-
-function stripCommonSuffixes(s: string): string {
-  let out = (s || "").trim();
-  for (const pattern of SUFFIX_PATTERNS) {
-    out = out.replace(pattern, "");
-  }
-  return out.trim();
+export function stripCommonSuffixes(s: string): string {
+    let out = (s || "").trim();
+    out = out.replace(/\s*-\s*(\d{4}\s*)?remaster(?:ed)?\s*$/i, "");
+    out = out.replace(/\s*-\s*remaster(?:ed)?\s*\d{4}\s*$/i, "");
+    out = out.replace(
+        /\s*-\s*(?:\d{4}\s+)?(deluxe|expanded|anniversary|special)\s+edition\s*$/i,
+        ""
+    );
+    out = out.replace(/\s*-\s*(mono|stereo)\s+version\s*$/i, "");
+    out = out.replace(/\s*-\s*\d{4}\s+version\s*$/i, "");
+    out = out.replace(/\s*-\s*version\s*$/i, "");
+    out = out.replace(/\s*-\s*(radio|album|single)\s+edit\s*$/i, "");
+    return out.trim();
 }
 
-function stripAccents(s: string): string {
-  return s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+export function cleanForSearch(s: string): string {
+    let out = stripCommonSuffixes(s);
+    out = out.replace(/\([^)]*\)/g, " ");
+    out = out.replace(/\[[^\]]*\]/g, " ");
+    out = out.replace(/\b(feat|ft)\.?\b.*$/i, " ");
+    out = out.replace(/\s+/g, " ");
+    return out.trim();
 }
 
-export function normalizeForMatch(title: string, artist?: string): string {
-  let s = stripAccents(stripCommonSuffixes(title));
-  s = s.toLowerCase();
-  s = s.replace(/\([^)]*\)/g, " ");
-  s = s.replace(/\[[^\]]*\]/g, " ");
-  s = s.replace(/\b(feat|ft)\.?\b.*$/g, " ");
-  if (artist) {
-    const a = normalizeForMatch(artist);
-    if (a && s.startsWith(`${a} - `)) {
-      s = s.slice(a.length + 3);
-    }
-  }
-  s = s.replace(/^[a-z0-9]+ - /, "");
-  s = s.replace(/[^a-z0-9]+/g, " ");
-  s = s.replace(/\s+/g, " ");
-  return s.trim();
-}
-
-export function isRgCoverSameRelease(isrcs: string[], songIsrcs: string[] | undefined): boolean {
-  if (!isrcs || !isrcs.length || !songIsrcs || !songIsrcs.length) {
-    return false;
-  }
-  const release = new Set(
-    isrcs.map((v) => (v || "").trim().toUpperCase()).filter(Boolean),
-  );
-  if (release.size === 0) {
-    return false;
-  }
-  for (const v of songIsrcs.map((x) => (x || "").trim().toUpperCase())) {
-    if (v && release.has(v)) {
-      return true;
-    }
-  }
-  return false;
+export function normalizeName(s: string): string {
+    let out = stripCommonSuffixes(s || "").toLowerCase().trim();
+    out = out.replace(/\([^)]*\)/g, " ");
+    out = out.replace(/\[[^\]]*\]/g, " ");
+    out = out.replace(/\b(feat|ft)\.?\b.*$/i, " ");
+    out = out.replace(/[^a-z0-9]+/g, " ");
+    out = out.replace(/\s+/g, " ");
+    return out.trim();
 }
 
 export function splitArtists(s: string): string[] {
-  const text = (s || "").replace(/\(([^)]*)\)/g, " $1 ");
-  const parts = text
-    .split(/[,;\/&]|\bfeat\.?|\bft\.?/i)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of parts) {
-    const key = part.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(part);
-    }
-  }
-  return out;
+    return (s || "")
+        .split(/,|;|\/|&|\sfeat\.?|\sft\.?/i)
+        .map((p) => p.trim())
+        .filter(Boolean);
 }
 
 export function buildSearchQueries(title: string, artist: string): string[] {
-  const t = normalizeForMatch(title);
-  const artists = splitArtists(artist);
-  const firstArtist = artists.length > 0 ? normalizeForMatch(artists[0]) : normalizeForMatch(artist);
+    const titleClean = cleanForSearch(title);
+    const artistsClean = cleanForSearch(artist);
+    const split = splitArtists(artistsClean);
+    const firstArtist = split[0] || artistsClean;
 
-  const queries: string[] = [];
-  if (t && firstArtist) {
-    queries.push(`${t} ${firstArtist}`);
-  }
-  if (t && !queries.includes(t)) {
-    queries.push(t);
-  }
-  if (firstArtist && !queries.includes(firstArtist)) {
-    queries.push(firstArtist);
-  }
-  return queries;
+    const queries: string[] = [];
+    if (titleClean && artistsClean) {
+        queries.push(`${titleClean} ${artistsClean}`.trim());
+    }
+    if (titleClean && firstArtist && firstArtist !== artistsClean) {
+        queries.push(`${titleClean} ${firstArtist}`.trim());
+    }
+    if (titleClean) {
+        queries.push(titleClean);
+    }
+
+    const rawCombo = `${title} ${artist}`.trim();
+    if (rawCombo && !queries.includes(rawCombo)) {
+        queries.push(rawCombo);
+    }
+    if (title && !queries.includes(title)) {
+        queries.push(title);
+    }
+
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const q of queries) {
+        const t = q.trim();
+        if (!t || seen.has(t)) continue;
+        seen.add(t);
+        out.push(t);
+    }
+    return out;
+}
+
+function titleScore(targetTitle: string, candidateTitle: string): number {
+    const t = normalizeName(targetTitle);
+    const c = normalizeName(candidateTitle);
+    if (!t || !c) return 0;
+    if (t === c) return 100;
+    if (t.includes(c) || c.includes(t)) return 60;
+    return 0;
+}
+
+export function artistScore(targetArtist: string, candidateArtist: string): number {
+    const targetParts = splitArtists(targetArtist)
+        .map(normalizeName)
+        .filter(Boolean);
+    const c = normalizeName(candidateArtist);
+    if (targetParts.length === 0 || !c) return 0;
+    return targetParts.some((a) => c.includes(a) || a.includes(c)) ? 50 : 0;
+}
+
+export function albumScore(
+    targetAlbum: string | undefined,
+    candidateAlbum: string | undefined
+): number {
+    if (!targetAlbum || !candidateAlbum) return 0;
+    const t = normalizeName(targetAlbum);
+    const c = normalizeName(candidateAlbum);
+    return t && c && t === c ? 10 : 0;
 }
 
 const MATCH_THRESHOLD = 70;
-const DURATION_TOLERANCE_SECONDS = 4;
 
-function normalizeIsrcs(isrcs: string[] | undefined): Set<string> {
-  return new Set((isrcs ?? []).map((v) => v.trim().toUpperCase()).filter(Boolean));
-}
-
-function durationDelta(song: NavidromeSong, targetDuration: number): number {
-  return Math.abs((song.duration ?? 0) - targetDuration);
-}
-
-function pickIsrcWinner(
-  songs: NavidromeSong[],
-  targetIsrcs: Set<string>,
-  targetDuration: number,
-): NavidromeSong | null {
-  const candidates = songs.filter((song) => {
-    const songIsrcs = normalizeIsrcs(song.isrc);
-    for (const isrc of songIsrcs) {
-      if (targetIsrcs.has(isrc)) {
-        return true;
-      }
-    }
-    return false;
-  });
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  let best = candidates[0];
-  let bestDelta = durationDelta(candidates[0], targetDuration);
-  for (const song of candidates.slice(1)) {
-    const delta = durationDelta(song, targetDuration);
-    if (delta < bestDelta) {
-      best = song;
-      bestDelta = delta;
-    }
-  }
-  return best;
-}
-
+/**
+ * Pick the best Navidrome song for a Kima track.
+ * 1) ISRC exact match within the candidates wins outright (globally unique).
+ * 2) Otherwise best fuzzy score (>= threshold); equal scores resolved by
+ *    closest duration.
+ * Returns the song id or null.
+ */
 export function pickBestMatch(
-  songs: NavidromeSong[],
-  target: { title: string; artist?: string; duration?: number; isrcs?: string[] },
-): NavidromeSong | null {
-  if (!songs.length) {
-    return null;
-  }
+    songs: NavidromeSong[],
+    target: MatchTarget
+): string | null {
+    if (!songs || songs.length === 0) return null;
 
-  const targetDuration = target.duration ?? 0;
-
-  const targetIsrcs = normalizeIsrcs(target.isrcs);
-  if (targetIsrcs.size > 0) {
-    const isrcWinner = pickIsrcWinner(songs, targetIsrcs, targetDuration);
-    if (isrcWinner) {
-      return isrcWinner;
-    }
-  }
-
-  const targetTitle = normalizeForMatch(target.title);
-  const targetArtists = target.artist
-    ? splitArtists(target.artist).map((a) => normalizeForMatch(a))
-    : [];
-
-  let best: NavidromeSong | null = null;
-  let bestScore = 0;
-  let bestDelta = 0;
-
-  for (const song of songs) {
-    const title = normalizeForMatch(song.title);
-    const artist = normalizeForMatch(song.artist);
-
-    if (!song.id || !title) {
-      continue;
+    const targetIsrc = (target.isrc || "").trim().toUpperCase();
+    if (targetIsrc) {
+        for (const s of songs) {
+            const isrcs = (s.isrc || []).map((x) => (x || "").trim().toUpperCase());
+            if (isrcs.includes(targetIsrc)) return s.id;
+        }
     }
 
-    let score = 0;
+    let best: { score: number; durationDelta: number; id: string } | null =
+        null;
+    for (const s of songs) {
+        const score =
+            titleScore(target.title, s.title) +
+            artistScore(target.artist, s.artist || "") +
+            albumScore(target.album, s.album);
+        if (score < MATCH_THRESHOLD) continue;
 
-    if (title === targetTitle) {
-      score += 100;
-    } else if (targetTitle && (targetTitle.includes(title) || title.includes(targetTitle))) {
-      score += 60;
+        let durationDelta = 0;
+        if (target.duration && s.duration) {
+            durationDelta = Math.abs(target.duration - s.duration);
+        }
+
+        if (
+            !best ||
+            score > best.score ||
+            (score === best.score && durationDelta < best.durationDelta)
+        ) {
+            best = { score, durationDelta, id: s.id };
+        }
     }
-
-    if (targetArtists.length > 0) {
-      if (targetArtists.some((a) => a && (artist.includes(a) || a.includes(artist)))) {
-        score += 50;
-      }
-    }
-
-    const delta = durationDelta(song, targetDuration);
-    if (delta <= DURATION_TOLERANCE_SECONDS) {
-      score += 20;
-    }
-
-    if (score > bestScore || (best !== null && score === bestScore && delta < bestDelta)) {
-      best = song;
-      bestScore = score;
-      bestDelta = delta;
-    }
-  }
-
-  if (bestScore < MATCH_THRESHOLD) {
-    return null;
-  }
-  return best;
+    return best ? best.id : null;
 }
