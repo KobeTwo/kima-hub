@@ -99,6 +99,13 @@ const systemSettingsSchema = z.object({
   spotifyClientId: z.string().nullable().optional(),
   spotifyClientSecret: z.string().nullable().optional(),
 
+  // Navidrome Sync
+  navidromeSyncEnabled: z.boolean().optional(),
+  navidromeUrl: z.union([z.string().url(), z.literal("")]).optional(),
+  navidromeUser: z.string().nullable().optional(),
+  navidromePassword: z.string().nullable().optional(),
+  navidromeNamePrefix: z.string().optional(),
+
   // Storage Paths
   musicPath: z.string().optional(),
   downloadPath: z.string().optional(),
@@ -168,6 +175,7 @@ router.get("/", async (req, res) => {
       soulseekPassword: safeDecrypt(settings.soulseekPassword),
       slskdApiKey: safeDecrypt(settings.slskdApiKey),
       spotifyClientSecret: safeDecrypt(settings.spotifyClientSecret),
+      navidromePassword: safeDecrypt(settings.navidromePassword),
     };
 
     res.json(decryptedSettings);
@@ -213,6 +221,8 @@ router.post("/", async (req, res) => {
       encryptedData.slskdApiKey = encrypt(data.slskdApiKey);
     if (data.spotifyClientSecret)
       encryptedData.spotifyClientSecret = encrypt(data.spotifyClientSecret);
+    if (data.navidromePassword)
+      encryptedData.navidromePassword = encrypt(data.navidromePassword);
 
     // Fetch existing settings before save to detect credential changes
     const existingSettings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
@@ -822,6 +832,69 @@ router.post("/test-spotify", async (req, res) => {
     }
   } catch (error) {
     safeError(res, "Spotify credentials test", error);
+  }
+});
+
+// Test Navidrome connection
+router.post("/test-navidrome", async (req, res) => {
+  try {
+    const { url, username, password } = req.body;
+
+    if (!url || !username || !password) {
+      return res
+        .status(400)
+        .json({ error: "URL, username and password are required" });
+    }
+
+    logger.debug("[NAVIDROME-TEST] Testing connection to:", url);
+
+    const { navidromeSync } = await import("../services/navidromeSync");
+    const result = await navidromeSync.testConnection(url, username, password);
+
+    if (!result.ok) {
+      return res.status(502).json({
+        error: result.error || "Connection failed",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Navidrome connection successful",
+    });
+  } catch (error) {
+    safeError(res, "Navidrome connection test", error);
+  }
+});
+
+// Trigger a Navidrome playlist sync now
+router.post("/navidrome-sync/now", async (req, res) => {
+  try {
+    const { playlistIds } = req.body;
+
+    const { getSystemSettings } = await import("../utils/systemSettings");
+    const settings = await getSystemSettings();
+    if (
+      !settings?.navidromeSyncEnabled ||
+      !settings.navidromeUrl ||
+      !settings.navidromeUser ||
+      !settings.navidromePassword
+    ) {
+      return res.status(400).json({
+        error: "Navidrome sync is not configured/enabled in settings",
+      });
+    }
+
+    const { navidromeSync } = await import("../services/navidromeSync");
+    const results =
+      Array.isArray(playlistIds) && playlistIds.length > 0
+        ? await Promise.all(
+            playlistIds.map((id: string) => navidromeSync.syncPlaylist(id))
+          )
+        : await navidromeSync.syncAll();
+
+    res.json({ success: true, results });
+  } catch (error) {
+    safeError(res, "Navidrome sync trigger", error);
   }
 });
 

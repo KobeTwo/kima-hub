@@ -75,6 +75,10 @@ export async function getSystemSettings(forceRefresh = false) {
             settings.soulseekPassword,
             "soulseekPassword",
         ),
+        navidromePassword: safeDecrypt(
+            settings.navidromePassword,
+            "navidromePassword",
+        ),
     };
 
     cachedSettings = decrypted;
