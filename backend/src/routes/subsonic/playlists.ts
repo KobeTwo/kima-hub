@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../../utils/db";
 import { subsonicOk, subsonicError, SubsonicError } from "../../utils/subsonicResponse";
 import { mapSong, wrap } from "./mappers";
+import { navidromeSync } from "../../services/navidromeSync";
 
 export const playlistRouter = Router();
 
@@ -142,6 +143,8 @@ playlistRouter.all("/createPlaylist.view", wrap(async (req, res) => {
         return subsonicError(req, res, SubsonicError.MISSING_PARAM, "playlistId or name is required");
     }
 
+    navidromeSync.markDirty(resolvedPlaylistId);
+
     // Return the full playlist per OpenSubsonic spec (since 1.14.0)
     const created = await prisma.playlist.findUnique({
         where: { id: resolvedPlaylistId },
@@ -263,6 +266,10 @@ playlistRouter.all("/updatePlaylist.view", wrap(async (req, res) => {
                 });
             }
         });
+    }
+
+    if (name !== undefined || songIdsToAdd.length > 0 || indexesToRemove.length > 0) {
+        navidromeSync.markDirty(playlistId);
     }
 
     return subsonicOk(req, res);

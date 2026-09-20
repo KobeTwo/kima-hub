@@ -22,6 +22,7 @@ import { trackIdentityService } from "./trackIdentity";
 import { songLinkService } from "./songlink";
 import { eventBus } from "./eventBus";
 import { extractPlaylist as ytdlpExtractPlaylist } from "./ytdlp";
+import { navidromeSync } from "./navidromeSync";
 import { M3UEntry } from "./m3uParser";
 import {
   normalizeString,
@@ -2447,6 +2448,7 @@ class SpotifyImportService {
     }
 
     job.createdPlaylistId = playlist.id;
+    navidromeSync.markDirty(playlist.id);
     job.tracksMatched = uniqueTrackIds.length;
     job.status = "completed";
     job.progress = 100;
@@ -3211,6 +3213,10 @@ class SpotifyImportService {
     logger?.debug(
       `   Reconciliation complete: ${totalTracksAdded} tracks added to ${playlistsWithAdditions.size} playlists`,
     );
+
+    for (const playlistId of playlistsWithAdditions) {
+      navidromeSync.markDirty(playlistId);
+    }
 
     return {
       playlistsUpdated: playlistsWithAdditions.size,

@@ -6,6 +6,7 @@ import { requireAuthOrToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { sessionLog } from "../utils/playlistLogger";
 import { safeError } from "../utils/errors";
+import { navidromeSync } from "../services/navidromeSync";
 
 const router = Router();
 
@@ -156,6 +157,8 @@ router.post("/", async (req, res) => {
             },
         });
 
+        navidromeSync.markDirty(playlist.id);
+
         res.json(playlist);
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -302,6 +305,8 @@ router.put("/:id", async (req, res) => {
                 ...(data.isPublic !== undefined && { isPublic: data.isPublic }),
             },
         });
+
+        navidromeSync.markDirty(req.params.id);
 
         res.json(playlist);
     } catch (error) {
@@ -489,6 +494,8 @@ router.post("/:id/items", async (req, res) => {
             },
         });
 
+        navidromeSync.markDirty(req.params.id);
+
         res.json(item);
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -527,6 +534,8 @@ router.delete("/:id/items/:trackId", async (req, res) => {
                 },
             },
         });
+
+        navidromeSync.markDirty(req.params.id);
 
         res.json({ message: "Track removed from playlist" });
     } catch (error) {
@@ -572,6 +581,8 @@ router.put("/:id/items/reorder", async (req, res) => {
         );
 
         await prisma.$transaction(updates);
+
+        navidromeSync.markDirty(req.params.id);
 
         res.json({ message: "Playlist reordered" });
     } catch (error) {

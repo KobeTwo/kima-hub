@@ -56,6 +56,10 @@ jest.mock('../../utils/errors', () => ({
     safeError: jest.fn((err: Error) => err.message),
 }));
 
+jest.mock('../../services/navidromeSync', () => ({
+    navidromeSync: { markDirty: jest.fn() },
+}));
+
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
