@@ -36,22 +36,6 @@ jest.mock('../../services/imageStorage', () => ({
     getResizedImagePath: jest.fn(),
 }));
 
-jest.mock('../../services/audioStreaming', () => ({
-    getAudioStreamingService: jest.fn(() => ({
-        streamFileWithRangeSupport: jest.fn(),
-    })),
-}));
-
-jest.mock('../../config', () => ({
-    config: {
-        music: {
-            musicPath: '/music',
-            transcodeCachePath: '/tmp/transcode',
-            transcodeCacheMaxGb: 10,
-        },
-    },
-}));
-
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -114,8 +98,6 @@ const BASE_SHARE_LINK = {
     entityId: 'track-id-1',
     createdBy: 'user-1',
     expiresAt: null,
-    maxPlays: null,
-    playCount: 0,
     createdAt: new Date(),
 };
 
@@ -142,18 +124,6 @@ describe('GET /share/:token -- resolve share link', () => {
         const res = await request(app).get('/share/valid-token-abc');
         expect(res.status).toBe(410);
         expect(res.body.error).toBe('Share link has expired');
-    });
-
-    it('returns 410 when play limit has been reached', async () => {
-        (prisma.shareLink.findUnique as jest.Mock).mockResolvedValue({
-            ...BASE_SHARE_LINK,
-            maxPlays: 5,
-            playCount: 5,
-        });
-
-        const res = await request(app).get('/share/valid-token-abc');
-        expect(res.status).toBe(410);
-        expect(res.body.error).toBe('Share link play limit reached');
     });
 
     it('returns 404 when the referenced track no longer exists', async () => {

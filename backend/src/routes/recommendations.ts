@@ -12,55 +12,40 @@ router.use(requireAuthOrToken);
 router.get("/for-you", async (req, res) => {
     try {
         const { limit = "10" } = req.query;
-        const userId = req.user!.id;
         const limitNum = parseInt(limit as string, 10);
 
-        // Get user's most played artists
-        const recentPlays = await prisma.play.findMany({
-            where: { userId },
-            orderBy: { playedAt: "desc" },
-            take: 50,
-            include: {
-                track: {
-                    include: {
-                        album: {
-                            include: {
-                                artist: true,
-                            },
-                        },
-                    },
-                },
+        // Seed artists from the most recently added library albums
+        const recentAlbums = await prisma.album.findMany({
+            where: {
+                location: "LIBRARY",
+                tracks: { some: {} },
             },
+            orderBy: { lastSynced: "desc" },
+            take: 50,
+            select: { artistId: true },
         });
 
-        // Count plays per artist
-        const artistPlayCounts = new Map<
-            string,
-            { artist: any; count: number }
-        >();
-        for (const play of recentPlays) {
-            const artist = play.track.album.artist;
-            const existing = artistPlayCounts.get(artist.id);
-            if (existing) {
-                existing.count++;
-            } else {
-                artistPlayCounts.set(artist.id, { artist, count: 1 });
+        const seedArtistIds: string[] = [];
+        for (const album of recentAlbums) {
+            if (!seedArtistIds.includes(album.artistId)) {
+                seedArtistIds.push(album.artistId);
             }
+            if (seedArtistIds.length >= 3) break;
         }
 
-        // Sort by play count and get top 3 seed artists
-        const topArtists = Array.from(artistPlayCounts.values())
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 3);
-
-        if (topArtists.length === 0) {
-            // No listening history, return empty recommendations
+        if (seedArtistIds.length === 0) {
+            // No library content, return empty recommendations
             return res.json({ artists: [] });
         }
 
+        const topArtists = await prisma.artist.findMany({
+            where: { id: { in: seedArtistIds } },
+            select: { id: true },
+        });
+
         // Get similar artists for each top artist
         const allSimilarArtists = await Promise.all(
-            topArtists.map(async ({ artist }) => {
+            topArtists.map(async (artist) => {
                 const similar = await prisma.similarArtist.findMany({
                     where: { fromArtistId: artist.id },
                     orderBy: { weight: "desc" },

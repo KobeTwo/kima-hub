@@ -29,7 +29,6 @@ import spotifyRoutes from "./routes/spotify";
 import notificationsRoutes from "./routes/notifications";
 import browseRoutes from "./routes/browse";
 import releasesRoutes from "./routes/releases";
-import systemRoutes from "./routes/system";
 import shareRoutes from "./routes/share";
 import eventsRoutes from "./routes/events";
 import eventsTicketRoutes from "./routes/eventsTicket";
@@ -145,7 +144,6 @@ app.use("/api/homepage", apiLimiter, homepageRoutes);
 app.use("/api/spotify", apiLimiter, spotifyRoutes);
 app.use("/api/browse", apiLimiter, browseRoutes);
 app.use("/api/releases", apiLimiter, releasesRoutes);
-app.use("/api/system", apiLimiter, systemRoutes);
 // SSE ticket endpoint (must be registered before /api/events)
 app.use("/api/events/ticket", apiLimiter, eventsTicketRoutes);
 // SSE - no rate limit, long-lived connections

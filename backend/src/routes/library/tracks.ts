@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { prisma, Prisma } from "../../utils/db";
+import { prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
 import { lrclibService } from "../../services/lrclib";
 import { rateLimiter } from "../../services/rateLimiter";
@@ -22,181 +22,6 @@ const TRACK_SORT_MAP: Record<string, any> = {
 const MAX_LIMIT = 10000;
 
 const router = Router();
-
-router.get("/recently-listened", async (req, res) => {
-  try {
-    const { limit = "10" } = req.query;
-    const userId = req.user!.id;
-    const limitNum = Math.min(parseInt(limit as string, 10) || 10, 100);
-
-    const [recentPlays, inProgressAudiobooks, inProgressPodcasts] =
-      await Promise.all([
-        prisma.play.findMany({
-          where: {
-            userId,
-            source: { in: ["LIBRARY", "DISCOVERY_KEPT"] },
-            track: {
-              album: {
-                location: "LIBRARY",
-              },
-            },
-          },
-          orderBy: { playedAt: "desc" },
-          take: limitNum * 3,
-          include: {
-            track: {
-              include: {
-                album: {
-                  include: {
-                    artist: {
-                      select: {
-                        id: true,
-                        mbid: true,
-                        name: true,
-                        heroUrl: true,
-                        userHeroUrl: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        }),
-        prisma.audiobookProgress.findMany({
-          where: {
-            userId,
-            isFinished: false,
-            currentTime: { gt: 0 },
-          },
-          orderBy: { lastPlayedAt: Prisma.SortOrder.desc },
-          take: Math.ceil(limitNum / 3),
-        }),
-        prisma.podcastProgress.findMany({
-          where: {
-            userId,
-            isFinished: false,
-            currentTime: { gt: 0 },
-          },
-          orderBy: { lastPlayedAt: Prisma.SortOrder.desc },
-          take: limitNum * 2,
-          include: {
-            episode: {
-              include: {
-                podcast: {
-                  select: {
-                    id: true,
-                    title: true,
-                    author: true,
-                    imageUrl: true,
-                  },
-                },
-              },
-            },
-          },
-        }),
-      ]);
-
-    const seenPodcasts = new Set();
-    const uniquePodcasts = inProgressPodcasts
-      .filter((pp) => {
-        const podcastId = pp.episode.podcast.id;
-        if (seenPodcasts.has(podcastId)) {
-          return false;
-        }
-        seenPodcasts.add(podcastId);
-        return true;
-      })
-      .slice(0, Math.ceil(limitNum / 3));
-
-    const items: any[] = [];
-    const artistsMap = new Map();
-
-    for (const play of recentPlays) {
-      const artist = play.track.album.artist;
-      if (!artistsMap.has(artist.id)) {
-        artistsMap.set(artist.id, {
-          ...artist,
-          type: "artist",
-          lastPlayedAt: play.playedAt,
-        });
-      }
-      if (items.length >= limitNum) break;
-    }
-
-    const combined = [
-      ...Array.from(artistsMap.values()),
-      ...inProgressAudiobooks.map((ab: any) => {
-        const coverArt =
-          ab.coverUrl && !ab.coverUrl.startsWith("http")
-            ? `audiobook__${ab.coverUrl}`
-            : ab.coverUrl;
-
-        return {
-          id: ab.audiobookshelfId,
-          name: ab.title,
-          coverArt,
-          type: "audiobook",
-          author: ab.author,
-          progress:
-            ab.duration > 0
-              ? Math.round((ab.currentTime / ab.duration) * 100)
-              : 0,
-          lastPlayedAt: ab.lastPlayedAt,
-        };
-      }),
-      ...uniquePodcasts.map((pp: any) => ({
-        id: pp.episode.podcast.id,
-        episodeId: pp.episodeId,
-        name: pp.episode.podcast.title,
-        coverArt: pp.episode.podcast.imageUrl,
-        type: "podcast",
-        author: pp.episode.podcast.author,
-        progress:
-          pp.duration > 0
-            ? Math.round((pp.currentTime / pp.duration) * 100)
-            : 0,
-        lastPlayedAt: pp.lastPlayedAt,
-      })),
-    ];
-
-    combined.sort(
-      (a, b) =>
-        new Date(b.lastPlayedAt).getTime() - new Date(a.lastPlayedAt).getTime(),
-    );
-    const limitedItems = combined.slice(0, limitNum);
-
-    const artistIds = limitedItems
-      .filter((item) => item.type === "artist")
-      .map((item) => item.id);
-    const albumCounts = await prisma.ownedAlbum.groupBy({
-      by: ["artistId"],
-      where: { artistId: { in: artistIds } },
-      _count: { rgMbid: true },
-    });
-    const albumCountMap = new Map(
-      albumCounts.map((ac) => [ac.artistId, ac._count.rgMbid]),
-    );
-
-    const results = limitedItems.map((item) => {
-      if (item.type === "audiobook" || item.type === "podcast") {
-        return item;
-      } else {
-        const coverArt = item.userHeroUrl ?? item.heroUrl ?? null;
-        return {
-          ...item,
-          coverArt,
-          albumCount: albumCountMap.get(item.id) || 0,
-        };
-      }
-    });
-
-    res.json({ items: results });
-  } catch (error) {
-    logger.error("Get recently listened error:", error);
-    res.status(500).json({ error: "Failed to fetch recently listened" });
-  }
-});
 
 router.get("/recently-added", async (req, res) => {
   try {
@@ -695,54 +520,25 @@ router.get("/radio", async (req, res) => {
 
     switch (type) {
       case "discovery":
-        const unplayedTracks = await prisma.track.findMany({
+        const discoveryTracks = await prisma.track.findMany({
           where: {
-            plays: { none: {} },
+            album: { location: "DISCOVER" },
           },
           select: { id: true },
           take: limitNum * 2,
         });
-
-        if (unplayedTracks.length >= limitNum) {
-          trackIds = unplayedTracks.map((t) => t.id);
-        } else {
-          const leastPlayedTracks = await prisma.$queryRaw<{ id: string }[]>`
-                        SELECT t.id
-                        FROM "Track" t
-                        LEFT JOIN "Play" p ON p."trackId" = t.id
-                        GROUP BY t.id
-                        ORDER BY COUNT(p.id) ASC
-                        LIMIT ${limitNum * 2}
-                    `;
-          trackIds = leastPlayedTracks.map((t) => t.id);
-        }
+        trackIds = discoveryTracks.map((t) => t.id);
         break;
 
       case "favorites":
-        const mostPlayedTracks = await prisma.$queryRaw<
-          { id: string; play_count: bigint }[]
-        >`
-                    SELECT t.id, COUNT(p.id) as play_count
-                    FROM "Track" t
-                    LEFT JOIN "Play" p ON p."trackId" = t.id
-                    GROUP BY t.id
-                    HAVING COUNT(p.id) > 0
-                    ORDER BY play_count DESC
-                    LIMIT ${limitNum * 2}
-                `;
-
-        if (mostPlayedTracks.length > 0) {
-          trackIds = mostPlayedTracks.map((t) => t.id);
-        } else {
-          logger.debug(
-            "[Radio:favorites] No play data found, returning random tracks",
-          );
-          const randomTracks = await prisma.track.findMany({
-            select: { id: true },
-            take: limitNum * 2,
-          });
-          trackIds = randomTracks.map((t) => t.id);
-        }
+        logger.debug(
+          "[Radio:favorites] No play data available, returning random tracks",
+        );
+        const randomTracks = await prisma.track.findMany({
+          select: { id: true },
+          take: limitNum * 2,
+        });
+        trackIds = randomTracks.map((t) => t.id);
         break;
 
       case "decade":

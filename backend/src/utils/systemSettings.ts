@@ -67,10 +67,6 @@ export async function getSystemSettings(forceRefresh = false) {
         lastfmApiSecret: safeDecrypt(settings.lastfmApiSecret, "lastfmApiSecret"),
         lastfmUserKey: safeDecrypt(settings.lastfmUserKey, "lastfmUserKey"),
         fanartApiKey: safeDecrypt(settings.fanartApiKey, "fanartApiKey"),
-        audiobookshelfApiKey: safeDecrypt(
-            settings.audiobookshelfApiKey,
-            "audiobookshelfApiKey",
-        ),
         soulseekPassword: safeDecrypt(
             settings.soulseekPassword,
             "soulseekPassword",
