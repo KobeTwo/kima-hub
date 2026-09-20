@@ -39,12 +39,11 @@ npx prisma generate
 # Clear Redis cache on deployment to prevent stale data (e.g., 404 images)
 echo "[REDIS] Clearing cache for fresh deployment..."
 node -e "
-const { createClient } = require('redis');
-const client = createClient({ url: process.env.REDIS_URL || 'redis://redis:6379' });
-client.connect()
-  .then(() => client.flushAll())
-  .then(() => { console.log('[REDIS] Cache cleared successfully'); return client.quit(); })
-  .catch(err => { console.warn('[REDIS] Cache clear failed (non-critical):', err.message); });
+const Redis = require('ioredis');
+const client = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
+client.flushall()
+  .then(() => { console.log('[REDIS] Cache cleared successfully'); client.disconnect(); })
+  .catch(err => { console.warn('[REDIS] Cache clear failed (non-critical):', err.message); client.disconnect(); });
 " || echo "[REDIS] Cache clear skipped (Redis unavailable)"
 
 # Generate session secret if not provided
