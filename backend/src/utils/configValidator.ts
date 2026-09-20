@@ -2,7 +2,6 @@ import * as fs from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { logger } from "./logger";
-import * as path from "path";
 import { AppError, ErrorCode, ErrorCategory } from "./errors";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import { getSystemSettings } from "./systemSettings";
@@ -11,8 +10,6 @@ const execAsync = promisify(exec);
 
 export interface MusicConfig {
     musicPath: string;
-    transcodeCachePath: string;
-    transcodeCacheMaxGb: number;
 }
 
 /**
@@ -67,53 +64,6 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         );
     }
 
-    // Get transcode cache path
-    const transcodeCachePath =
-        process.env.TRANSCODE_CACHE_PATH ||
-        path.join(process.cwd(), "cache", "transcodes");
-
-    // VALIDATE TRANSCODE CACHE PATH
-    // Create if doesn't exist
-    if (!fs.existsSync(transcodeCachePath)) {
-        try {
-            fs.mkdirSync(transcodeCachePath, { recursive: true });
-            logger.debug(
-                `Created transcode cache directory: ${transcodeCachePath}`
-            );
-        } catch (err: any) {
-            throw new AppError(
-                ErrorCode.TRANSCODE_CACHE_NOT_WRITABLE,
-                ErrorCategory.FATAL,
-                `Cannot create transcode cache directory: ${transcodeCachePath}`,
-                { originalError: err.message }
-            );
-        }
-    }
-
-    // Validate writable
-    try {
-        fs.accessSync(transcodeCachePath, fs.constants.W_OK);
-    } catch {
-        throw new AppError(
-            ErrorCode.TRANSCODE_CACHE_NOT_WRITABLE,
-            ErrorCategory.FATAL,
-            `Transcode cache not writable: ${transcodeCachePath}. Check file permissions.`
-        );
-    }
-
-    // Get cache size limit from SystemSettings or fallback to env/default
-    const transcodeCacheMaxGb =
-        settings?.transcodeCacheMaxGb ||
-        parseInt(process.env.TRANSCODE_CACHE_MAX_GB || "10", 10);
-
-    if (isNaN(transcodeCacheMaxGb) || transcodeCacheMaxGb < 1) {
-        throw new AppError(
-            ErrorCode.INVALID_CONFIG,
-            ErrorCategory.FATAL,
-            `Invalid transcode cache size: must be a positive integer. Got: ${transcodeCacheMaxGb}`
-        );
-    }
-
     // VALIDATE BUNDLED FFMPEG (from @ffmpeg-installer/ffmpeg)
     try {
         // Check if bundled FFmpeg binary exists
@@ -140,12 +90,8 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
 
     logger.debug("Music configuration validated successfully");
     logger.debug(`   Music path: ${musicPath}`);
-    logger.debug(`   Transcode cache: ${transcodeCachePath}`);
-    logger.debug(`   Cache limit: ${transcodeCacheMaxGb} GB`);
 
     return {
         musicPath,
-        transcodeCachePath,
-        transcodeCacheMaxGb,
     };
 }
