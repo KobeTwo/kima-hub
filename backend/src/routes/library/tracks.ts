@@ -3,12 +3,7 @@ import { prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
 import { lrclibService } from "../../services/lrclib";
 import { rateLimiter } from "../../services/rateLimiter";
-import { getMergedGenres } from "../../utils/metadataOverrides";
-import {
-  getEffectiveYear,
-  getDecadeWhereClause,
-  getDecadeFromYear,
-} from "../../utils/dateFilters";
+import { getEffectiveYear, getDecadeFromYear } from "../../utils/dateFilters";
 import { shuffleArray } from "../../utils/shuffle";
 import { config } from "../../config";
 import path from "path";
