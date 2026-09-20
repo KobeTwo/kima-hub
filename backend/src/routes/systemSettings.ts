@@ -101,7 +101,8 @@ const systemSettingsSchema = z.object({
 
   // Navidrome Sync
   navidromeSyncEnabled: z.boolean().optional(),
-  navidromeUrl: z.union([z.string().url(), z.literal("")]).optional(),
+  navidromeUrl: z.union([z.string().url(), z.literal("")]).nullable()
+    .optional(),
   navidromeUser: z.string().nullable().optional(),
   navidromePassword: z.string().nullable().optional(),
   navidromeNamePrefix: z.string().optional(),
@@ -885,10 +886,13 @@ router.post("/navidrome-sync/now", async (req, res) => {
     }
 
     const { navidromeSync } = await import("../services/navidromeSync");
+    const ids = Array.isArray(playlistIds)
+      ? playlistIds.filter((id: unknown) => typeof id === "string")
+      : [];
     const results =
-      Array.isArray(playlistIds) && playlistIds.length > 0
+      ids.length > 0
         ? await Promise.all(
-            playlistIds.map((id: string) => navidromeSync.syncPlaylist(id))
+            ids.map((id: string) => navidromeSync.syncPlaylist(id))
           )
         : await navidromeSync.syncAll();
 

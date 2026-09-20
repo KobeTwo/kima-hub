@@ -197,4 +197,21 @@ describe("POST /system-settings/navidrome-sync/now", () => {
         expect(res.body.results).toHaveLength(1);
         expect(navidromeSync.syncAll).toHaveBeenCalledTimes(1);
     });
+
+    it("syncs the given playlist ids when provided", async () => {
+        (getSystemSettings as jest.Mock).mockResolvedValue(CONFIGURED);
+        (navidromeSync.syncPlaylist as jest.Mock).mockResolvedValue({
+            playlistId: "p9",
+            name: "Nine",
+            status: "synced",
+        });
+        const app = makeApp();
+        const res = await request(app)
+            .post("/system-settings/navidrome-sync/now")
+            .set("Authorization", `Bearer ${token()}`)
+            .send({ playlistIds: ["p9"] });
+        expect(res.status).toBe(200);
+        expect(navidromeSync.syncPlaylist).toHaveBeenCalledWith("p9");
+        expect(navidromeSync.syncAll).not.toHaveBeenCalled();
+    });
 });
