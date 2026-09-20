@@ -80,23 +80,7 @@ class NavidromeSyncService {
             logger.info(`[NavidromeSync] flushing ${ids.length} playlist(s)`);
             for (const id of ids) {
                 try {
-                    const result = await this.syncPlaylist(id);
-                    if (result.status === "synced") {
-                        logger.info(
-                            `[NavidromeSync] Synced "${result.name}": ${result.matched}/${result.total} tracks`
-                        );
-                        if (result.missing && result.missing.length > 0) {
-                            logger.info(
-                                `[NavidromeSync]   missing: ${result.missing
-                                    .slice(0, 20)
-                                    .join("; ")}`
-                            );
-                        }
-                    } else if (result.status === "error") {
-                        logger.warn(
-                            `[NavidromeSync] Failed "${result.name}": ${result.error}`
-                        );
-                    }
+                    await this.syncPlaylist(id);
                 } catch (error: any) {
                     logger.error(
                         `[NavidromeSync] Unexpected error for ${id}:`,
@@ -124,17 +108,17 @@ class NavidromeSyncService {
     }
 
     async syncPlaylist(playlistId: string): Promise<SyncResult> {
-        const settings = await this.getSettings();
-        if (!settings) {
-            return {
-                playlistId,
-                name: "",
-                status: "skipped_not_configured",
-                error: "navidrome sync not configured",
-            };
-        }
-
         try {
+            const settings = await this.getSettings();
+            if (!settings) {
+                return {
+                    playlistId,
+                    name: "",
+                    status: "skipped_not_configured",
+                    error: "navidrome sync not configured",
+                };
+            }
+
             const playlist = await prisma.playlist.findUnique({
                 where: { id: playlistId },
                 include: {
@@ -176,6 +160,9 @@ class NavidromeSyncService {
                 };
             }
             if (playlist.items.length === 0) {
+                logger.info(
+                    `[NavidromeSync] skipping empty playlist ${playlistId}`
+                );
                 return {
                     playlistId,
                     name: playlist.name,
@@ -248,6 +235,17 @@ class NavidromeSyncService {
                 { ...auth, name: targetName, songId: songIds },
                 base
             );
+
+            logger.info(
+                `[NavidromeSync] Synced "${targetName}": ${songIds.length}/${playlist.items.length} tracks`
+            );
+            if (missing.length > 0) {
+                logger.info(
+                    `[NavidromeSync]   missing: ${missing
+                        .slice(0, 20)
+                        .join("; ")}`
+                );
+            }
 
             return {
                 playlistId,

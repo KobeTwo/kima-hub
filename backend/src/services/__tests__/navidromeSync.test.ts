@@ -295,6 +295,45 @@ describe("navidromeSync", () => {
             expect(result.status).toBe("skipped_not_configured");
             expect(mockedAxios.post).not.toHaveBeenCalled();
         });
+
+        it("applies the name prefix to the Navidrome playlist name", async () => {
+            mockedSettings.mockResolvedValue(
+                { ...SETTINGS, navidromeNamePrefix: "KIMA " } as never
+            );
+            mockedPrisma.playlist.findUnique.mockResolvedValue(
+                PLAYLIST as never
+            );
+            mockedAxios.post
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "w-1", title: "Wonderwall", artist: "Oasis", duration: 228, isrc: ["USX120400001"] },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "n-1", title: "No Signal", artist: "The Weeknd", duration: 200 },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(ok());
+
+            const result = await navidromeSync.syncPlaylist("pl-1");
+
+            expect(result.status).toBe("synced");
+            expect(result.name).toBe("KIMA Road Trip");
+            // no existing copy -> 4 calls: getPlaylists, search3, search3, createPlaylist
+            const createBody =
+                mockedAxios.post.mock.calls[3][1] as URLSearchParams;
+            expect(createBody.get("name")).toBe("KIMA Road Trip");
+        });
     });
 
     describe("testConnection", () => {
