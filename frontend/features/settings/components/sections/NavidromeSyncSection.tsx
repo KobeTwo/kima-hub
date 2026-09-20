@@ -41,9 +41,11 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
                 (data as { results?: Array<{ status: string }> })?.results || [];
             const synced = results.filter((r) => r.status === "synced").length;
             const failed = results.filter((r) => r.status === "error").length;
+            const skipped = results.length - synced - failed;
             setSyncStatus(failed > 0 ? "error" : "success");
             setSyncMessage(
                 `${synced} of ${results.length} playlists synced` +
+                    (skipped > 0 ? ` (${skipped} skipped)` : "") +
                     (failed > 0 ? ` (${failed} failed)` : "")
             );
         } catch (error: unknown) {
@@ -72,8 +74,9 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
 
             {settings.navidromeSyncEnabled && (
                 <>
-                    <SettingsRow label="Navidrome URL">
+                    <SettingsRow label="Navidrome URL" htmlFor="navidrome-sync-url">
                         <SettingsInput
+                            id="navidrome-sync-url"
                             value={settings.navidromeUrl}
                             onChange={(v) => onUpdate({ navidromeUrl: v })}
                             placeholder="http://host.docker.internal:4533"
@@ -81,8 +84,9 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="Username">
+                    <SettingsRow label="Username" htmlFor="navidrome-sync-user">
                         <SettingsInput
+                            id="navidrome-sync-user"
                             value={settings.navidromeUser}
                             onChange={(v) => onUpdate({ navidromeUser: v })}
                             placeholder="Navidrome username"
@@ -90,8 +94,9 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="Password">
+                    <SettingsRow label="Password" htmlFor="navidrome-sync-password">
                         <SettingsInput
+                            id="navidrome-sync-password"
                             type="password"
                             value={settings.navidromePassword}
                             onChange={(v) => onUpdate({ navidromePassword: v })}
@@ -100,8 +105,9 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="Name prefix">
+                    <SettingsRow label="Name prefix" htmlFor="navidrome-sync-prefix">
                         <SettingsInput
+                            id="navidrome-sync-prefix"
                             value={settings.navidromeNamePrefix}
                             onChange={(v) => onUpdate({ navidromeNamePrefix: v })}
                             placeholder="(optional, e.g. Kima: )"
@@ -136,7 +142,12 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
                         <div className="inline-flex items-center gap-3">
                             <button
                                 onClick={handleSyncNow}
-                                disabled={syncStatus === "loading"}
+                                disabled={
+                                    syncStatus === "loading" ||
+                                    !settings.navidromeUrl ||
+                                    !settings.navidromeUser ||
+                                    !settings.navidromePassword
+                                }
                                 className="px-4 py-1.5 text-xs font-mono bg-white/5 border border-white/10 text-white/70 rounded-lg uppercase tracking-wider
                                     hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
@@ -148,6 +159,9 @@ export function NavidromeSyncSection({ settings, onUpdate, onTest, isTesting }: 
                                 onClear={() => setSyncStatus("idle")}
                             />
                         </div>
+                        <p className="mt-2 text-xs font-mono text-white/30 uppercase tracking-wider">
+                            Uses saved settings — save changes first.
+                        </p>
                     </div>
                 </>
             )}
