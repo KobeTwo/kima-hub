@@ -53,6 +53,12 @@ export interface SystemSettings {
     primaryFailureFallback: "none" | "lidarr" | "soulseek";
     // Server
     publicUrl: string;
+    // Navidrome Sync
+    navidromeSyncEnabled: boolean;
+    navidromeUrl: string;
+    navidromeUser: string;
+    navidromePassword: string;
+    navidromeNamePrefix: string;
 }
 
 export interface ApiKey {

@@ -924,6 +924,19 @@ class ApiClient {
         });
     }
 
+    async testNavidrome(url: string, username: string, password: string) {
+        return this.request<ServiceTestResult>("/system-settings/test-navidrome", {
+            method: "POST",
+            body: JSON.stringify({ url, username, password }),
+        });
+    }
+
+    async syncNavidromeNow() {
+        return this.request<ApiData>("/system-settings/navidrome-sync/now", {
+            method: "POST",
+        });
+    }
+
     // Downloads (Lidarr)
     async downloadAlbum(
         artistName: string,

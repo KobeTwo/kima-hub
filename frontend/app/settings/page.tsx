@@ -17,6 +17,7 @@ import { SubsonicSection } from "@/features/settings/components/sections/Subsoni
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
 import { DownloadPreferencesSection } from "@/features/settings/components/sections/DownloadPreferencesSection";
 import { LidarrSection } from "@/features/settings/components/sections/LidarrSection";
+import { NavidromeSyncSection } from "@/features/settings/components/sections/NavidromeSyncSection";
 import { AudiobookshelfSection } from "@/features/settings/components/sections/AudiobookshelfSection";
 import { SoulseekSection } from "@/features/settings/components/sections/SoulseekSection";
 import { AIServicesSection } from "@/features/settings/components/sections/AIServicesSection";
@@ -32,6 +33,7 @@ const sidebarItems: SidebarItem[] = [
     { id: "playback", label: "Playback" },
     { id: "download-preferences", label: "Download Preferences", adminOnly: true },
     { id: "lidarr", label: "Download Services", adminOnly: true },
+    { id: "navidrome-sync", label: "Navidrome Sync", adminOnly: true },
     { id: "audiobookshelf", label: "Media Servers", adminOnly: true },
     { id: "soulseek", label: "P2P Networks", adminOnly: true },
     { id: "ai-services", label: "AI & Artwork", adminOnly: true },
@@ -161,6 +163,14 @@ export default function SettingsPage() {
                             onUpdate={updateSystemSettings}
                             onTest={handleTestService}
                             isTesting={testingServices.lidarr || false}
+                        />
+
+                        {/* Navidrome Sync */}
+                        <NavidromeSyncSection
+                            settings={systemSettings}
+                            onUpdate={updateSystemSettings}
+                            onTest={handleTestService}
+                            isTesting={testingServices["navidrome"] || false}
                         />
 
                         {/* Media Servers - Audiobookshelf */}

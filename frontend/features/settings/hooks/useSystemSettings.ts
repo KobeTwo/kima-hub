@@ -38,6 +38,12 @@ const defaultSystemSettings: SystemSettings = {
     primaryFailureFallback: "none",
     // Server
     publicUrl: "",
+    // Navidrome Sync
+    navidromeSyncEnabled: false,
+    navidromeUrl: "",
+    navidromeUser: "",
+    navidromePassword: "",
+    navidromeNamePrefix: "",
 };
 
 export function useSystemSettings() {
@@ -155,6 +161,13 @@ export function useSystemSettings() {
                     result = await api.testSpotify(
                         systemSettings.spotifyClientId,
                         systemSettings.spotifyClientSecret
+                    );
+                    break;
+                case "navidrome":
+                    result = await api.testNavidrome(
+                        systemSettings.navidromeUrl,
+                        systemSettings.navidromeUser,
+                        systemSettings.navidromePassword
                     );
                     break;
                 default:
