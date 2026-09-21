@@ -5,7 +5,6 @@ import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
 import { api } from "@/lib/api";
 import { enrichmentApi, type EnrichmentFailure } from "@/lib/enrichmentApi";
-import { useFeatures } from "@/lib/features-context";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
     useQueryClient,
@@ -225,7 +224,6 @@ const confirmMeta: Record<
 };
 
 export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
-    const { musicCNN, loading: featuresLoading } = useFeatures();
     const [syncing, setSyncing] = useState(false);
     const [clearingCaches, setClearingCaches] = useState(false);
     const [reEnriching, setReEnriching] = useState(false);
@@ -461,10 +459,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         syncStartTimeRef.current = Date.now();
         setError(null);
         try {
-            if (settings.audiobookshelfEnabled) {
-                await api.post("/audiobooks/sync", {});
-            }
-            await api.post("/podcasts/sync-covers", {});
             await api.syncLibraryEnrichment();
             refreshNotifications();
             refetchProgress();
@@ -750,40 +744,38 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             </div>
 
                             {/* Audio Analysis */}
-                            {!featuresLoading && musicCNN ? (
-                                <div className="flex items-start gap-2">
-                                    <div className="flex-1">
-                                        <EnrichmentStage
-                                            icon={Activity}
-                                            label="Audio Analysis"
-                                            description="BPM, key, energy, and danceability from audio files"
-                                            completed={
-                                                enrichmentProgress.audioAnalysis.completed
-                                            }
-                                            total={enrichmentProgress.audioAnalysis.total}
-                                            progress={
-                                                enrichmentProgress.audioAnalysis.progress
-                                            }
-                                            processing={
-                                                enrichmentProgress.audioAnalysis.processing
-                                            }
-                                            queued={enrichmentProgress.audioAnalysis.queued}
-                                            failed={enrichmentProgress.audioAnalysis.failed}
-                                            permanentlyFailed={enrichmentProgress.audioAnalysis.permanentlyFailed}
-                                            isBackground={true}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => setConfirmTarget("audioAnalysis")}
-                                        disabled={resettingAudio || syncing || reEnriching || isEnrichmentActive}
-                                        aria-label="Reset and re-run audio analysis"
-                                        className="mt-1 px-3 py-2.5 min-h-[44px] text-[10px] font-mono bg-white/5 border border-white/10 text-white/40 rounded-lg
-                                            hover:bg-white/10 hover:text-white/60 disabled:opacity-30 disabled:cursor-not-allowed transition-all whitespace-nowrap uppercase tracking-wider"
-                                    >
-                                        {resettingAudio ? "Resetting..." : "Re-run"}
-                                    </button>
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1">
+                                    <EnrichmentStage
+                                        icon={Activity}
+                                        label="Audio Analysis"
+                                        description="BPM, key, energy, and danceability from audio files"
+                                        completed={
+                                            enrichmentProgress.audioAnalysis.completed
+                                        }
+                                        total={enrichmentProgress.audioAnalysis.total}
+                                        progress={
+                                            enrichmentProgress.audioAnalysis.progress
+                                        }
+                                        processing={
+                                            enrichmentProgress.audioAnalysis.processing
+                                        }
+                                        queued={enrichmentProgress.audioAnalysis.queued}
+                                        failed={enrichmentProgress.audioAnalysis.failed}
+                                        permanentlyFailed={enrichmentProgress.audioAnalysis.permanentlyFailed}
+                                        isBackground={true}
+                                    />
                                 </div>
-                            ) : null}
+                                <button
+                                    onClick={() => setConfirmTarget("audioAnalysis")}
+                                    disabled={resettingAudio || syncing || reEnriching || isEnrichmentActive}
+                                    aria-label="Reset and re-run audio analysis"
+                                    className="mt-1 px-3 py-2.5 min-h-[44px] text-[10px] font-mono bg-white/5 border border-white/10 text-white/40 rounded-lg
+                                        hover:bg-white/10 hover:text-white/60 disabled:opacity-30 disabled:cursor-not-allowed transition-all whitespace-nowrap uppercase tracking-wider"
+                                >
+                                    {resettingAudio ? "Resetting..." : "Re-run"}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Control Buttons */}
@@ -915,56 +907,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         </div>
                     </div>
                 ) : null}
-
-                {/* Cache Sizes */}
-                <SettingsRow
-                    label="User cache size"
-                    description="Maximum storage for offline content"
-                >
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="range"
-                            min={512}
-                            max={20480}
-                            step={512}
-                            value={settings.maxCacheSizeMb}
-                            onChange={(e) =>
-                                onUpdate({
-                                    maxCacheSizeMb: parseInt(e.target.value),
-                                })
-                            }
-                            className={sliderClass}
-                        />
-                        <span className="text-xs font-mono text-white/50 w-16 text-right">
-                            {(settings.maxCacheSizeMb / 1024).toFixed(1)} GB
-                        </span>
-                    </div>
-                </SettingsRow>
-
-                <SettingsRow
-                    label="Transcode cache size"
-                    description="Server restart required for changes"
-                >
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="range"
-                            min={1}
-                            max={50}
-                            value={settings.transcodeCacheMaxGb}
-                            onChange={(e) =>
-                                onUpdate({
-                                    transcodeCacheMaxGb: parseInt(
-                                        e.target.value
-                                    ),
-                                })
-                            }
-                            className={sliderClass}
-                        />
-                        <span className="text-xs font-mono text-white/50 w-16 text-right">
-                            {settings.transcodeCacheMaxGb} GB
-                        </span>
-                    </div>
-                </SettingsRow>
 
                 {/* Automation */}
                 <SettingsRow

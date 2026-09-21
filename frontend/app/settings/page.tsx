@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
@@ -14,11 +13,9 @@ import {
 // Section components
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
 import { SubsonicSection } from "@/features/settings/components/sections/SubsonicSection";
-import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
 import { DownloadPreferencesSection } from "@/features/settings/components/sections/DownloadPreferencesSection";
 import { LidarrSection } from "@/features/settings/components/sections/LidarrSection";
 import { NavidromeSyncSection } from "@/features/settings/components/sections/NavidromeSyncSection";
-import { AudiobookshelfSection } from "@/features/settings/components/sections/AudiobookshelfSection";
 import { SoulseekSection } from "@/features/settings/components/sections/SoulseekSection";
 import { AIServicesSection } from "@/features/settings/components/sections/AIServicesSection";
 import { StoragePathsSection } from "@/features/settings/components/sections/StoragePathsSection";
@@ -30,11 +27,9 @@ import { CorruptTracksSection } from "@/features/settings/components/sections/Co
 const sidebarItems: SidebarItem[] = [
     { id: "account", label: "Account" },
     { id: "subsonic", label: "Native Apps" },
-    { id: "playback", label: "Playback" },
     { id: "download-preferences", label: "Download Preferences", adminOnly: true },
     { id: "lidarr", label: "Download Services", adminOnly: true },
     { id: "navidrome-sync", label: "Navidrome Sync", adminOnly: true },
-    { id: "audiobookshelf", label: "Media Servers", adminOnly: true },
     { id: "soulseek", label: "P2P Networks", adminOnly: true },
     { id: "ai-services", label: "AI & Artwork", adminOnly: true },
     { id: "storage", label: "Storage", adminOnly: true },
@@ -50,13 +45,6 @@ export default function SettingsPage() {
     const saveStatus = useInlineStatus();
 
     const isAdmin = user?.role === "admin";
-
-    // User settings hook
-    const {
-        settings: userSettings,
-        updateSettings: updateUserSettings,
-        saveSettings: saveUserSettings,
-    } = useSettingsData();
 
     // System settings hook (only used if admin)
     const {
@@ -87,13 +75,6 @@ export default function SettingsPage() {
         saveStatus.setLoading();
         let hasError = false;
 
-        try {
-            await saveUserSettings(userSettings);
-        } catch (error) {
-            console.error("Failed to save user settings:", error);
-            hasError = true;
-        }
-
         if (isAdmin) {
             try {
                 await saveSystemSettings(systemSettings);
@@ -110,7 +91,7 @@ export default function SettingsPage() {
         } else {
             saveStatus.setSuccess("Saved");
         }
-    }, [userSettings, systemSettings, isAdmin, saveUserSettings, saveSystemSettings, saveStatus]);
+    }, [systemSettings, isAdmin, saveSystemSettings, saveStatus]);
 
     // Test service wrapper
     const handleTestService = useCallback(async (service: string) => {
@@ -142,12 +123,6 @@ export default function SettingsPage() {
                 {/* Native Apps - Subsonic */}
                 <SubsonicSection />
 
-                {/* Playback Section */}
-                <PlaybackSection
-                    value={userSettings.playbackQuality}
-                    onChange={(quality) => updateUserSettings({ playbackQuality: quality })}
-                />
-
                 {/* Admin-only sections */}
                 {isAdmin && (
                     <>
@@ -171,14 +146,6 @@ export default function SettingsPage() {
                             onUpdate={updateSystemSettings}
                             onTest={handleTestService}
                             isTesting={testingServices["navidrome"] || false}
-                        />
-
-                        {/* Media Servers - Audiobookshelf */}
-                        <AudiobookshelfSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                            onTest={handleTestService}
-                            isTesting={testingServices.audiobookshelf || false}
                         />
 
                         {/* P2P Networks - Soulseek */}

@@ -46,8 +46,6 @@ export const queryKeys = {
         limit?: number;
         offset?: number;
     }) => ["library", "tracks", params] as const,
-    recentlyListened: (limit?: number) =>
-        ["library", "recently-listened", limit] as const,
     recentlyAdded: (limit?: number) =>
         ["library", "recently-added", limit] as const,
 
@@ -76,16 +74,6 @@ export const queryKeys = {
 
     // Popular artists
     popularArtists: (limit?: number) => ["popular-artists", limit] as const,
-
-    // Audiobooks
-    audiobooks: () => ["audiobooks"] as const,
-    audiobook: (id: string) => ["audiobook", id] as const,
-
-    // Podcasts
-    podcasts: () => ["podcasts"] as const,
-    podcast: (id: string) => ["podcast", id] as const,
-    topPodcasts: (limit?: number, genreId?: number) =>
-        ["podcasts", "top", limit, genreId] as const,
 
     // Browse (Deezer playlists/radios)
     browseAll: () => ["browse", "all"] as const,
@@ -176,25 +164,6 @@ export function useAlbumsQuery(params?: {
         queryKey: queryKeys.albums(params),
         queryFn: () => api.getAlbums(params),
         staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-}
-
-/**
- * Hook to fetch recently listened items (Continue Listening)
- *
- * Cache time: 2 minutes (may change frequently)
- *
- * @param limit - Number of items to fetch (default: 10)
- * @returns Query result with recently listened items
- *
- * @example
- * const { data } = useRecentlyListenedQuery(10);
- */
-export function useRecentlyListenedQuery(limit: number = 10) {
-    return useQuery({
-        queryKey: queryKeys.recentlyListened(limit),
-        queryFn: () => api.getRecentlyListened(limit),
-        staleTime: 2 * 60 * 1000, // 2 minutes
     });
 }
 
@@ -399,7 +368,7 @@ export function useSimilarAlbumsQuery(
  * Cache time: 5 minutes (search results are relatively static)
  *
  * @param query - Search query string
- * @param type - Type filter (all, artists, albums, tracks, audiobooks, podcasts)
+ * @param type - Type filter (all, artists, albums, tracks)
  * @param limit - Number of results per type (default: 20)
  * @returns Query result with search results
  *
@@ -412,9 +381,7 @@ export function useSearchQuery(
         | "all"
         | "artists"
         | "albums"
-        | "tracks"
-        | "audiobooks"
-        | "podcasts" = "all",
+        | "tracks" = "all",
     limit: number = 20,
 ) {
     return useQuery({
@@ -429,7 +396,7 @@ export function useSearchQuery(
  * Hook to search discovery/Last.fm with debouncing
  *
  * @param query - Search query string
- * @param type - Type filter (music, podcasts, all)
+ * @param type - Type filter (music, all)
  * @param limit - Number of results (default: 20)
  * @returns Query result with discovery search results
  *
@@ -438,7 +405,7 @@ export function useSearchQuery(
  */
 export function useDiscoverSearchQuery(
     query: string,
-    type: "music" | "podcasts" | "all" = "music",
+    type: "music" | "all" = "music",
     limit: number = 20,
 ) {
     return useQuery({
@@ -552,104 +519,6 @@ export function usePopularArtistsQuery(limit: number = 20) {
     return useQuery({
         queryKey: queryKeys.popularArtists(limit),
         queryFn: () => api.getPopularArtists(limit),
-        staleTime: 10 * 60 * 1000, // 10 minutes
-    });
-}
-
-/**
- * Hook to fetch all audiobooks
- *
- * @returns Query result with audiobooks array
- */
-export function useAudiobooksQuery() {
-    return useQuery({
-        queryKey: queryKeys.audiobooks(),
-        queryFn: () => api.getAudiobooks(),
-        staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-}
-
-/**
- * Hook to fetch a single audiobook
- *
- * @param id - Audiobook ID
- * @returns Query result with audiobook data
- */
-export function useAudiobookQuery(id: string | undefined) {
-    return useQuery({
-        queryKey: queryKeys.audiobook(id || ""),
-        queryFn: async () => {
-            if (!id) throw new Error("Audiobook ID is required");
-            return await api.getAudiobook(id);
-        },
-        enabled: !!id,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-}
-
-/**
- * Hook to fetch all subscribed podcasts
- *
- * @returns Query result with podcasts array
- */
-export function usePodcastsQuery() {
-    return useQuery({
-        queryKey: queryKeys.podcasts(),
-        queryFn: () => api.getPodcasts(),
-        staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-}
-
-/**
- * Hook to fetch a single podcast
- *
- * Returns null if podcast is not found (404), allowing the page to handle preview mode.
- *
- * @param id - Podcast ID
- * @returns Query result with podcast data
- */
-export function usePodcastQuery(id: string | undefined) {
-    // Numeric IDs are iTunes IDs, not database CUIDs - skip subscription lookup
-    const isItunesId = !!id && /^\d+$/.test(id);
-    return useQuery({
-        queryKey: queryKeys.podcast(id || ""),
-        queryFn: async () => {
-            if (!id) throw new Error("Podcast ID is required");
-            if (isItunesId) return null; // iTunes ID - go straight to preview mode
-
-            try {
-                return await api.getPodcast(id);
-            } catch (error) {
-                // If podcast not found (404), return null to allow preview mode
-                const err = error as { status?: number; message?: string };
-                if (
-                    err.status === 404 ||
-                    err.message?.includes("not found") ||
-                    err.message?.includes("not subscribed")
-                ) {
-                    return null;
-                }
-                // For other errors, throw to trigger error state
-                throw error;
-            }
-        },
-        enabled: !!id,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        retry: false, // Don't retry 404 errors
-    });
-}
-
-/**
- * Hook to fetch top podcasts
- *
- * @param limit - Number of podcasts (default: 20)
- * @param genreId - Optional genre ID filter
- * @returns Query result with top podcasts
- */
-export function useTopPodcastsQuery(limit: number = 20, genreId?: number) {
-    return useQuery({
-        queryKey: queryKeys.topPodcasts(limit, genreId),
-        queryFn: () => api.getTopPodcasts(limit, genreId),
         staleTime: 10 * 60 * 1000, // 10 minutes
     });
 }
