@@ -220,7 +220,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                             className="flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all bg-brand hover:bg-[#e69200] text-black hover:scale-105 disabled:bg-white/5 disabled:text-white/50 disabled:cursor-not-allowed disabled:hover:scale-100"
                         >
                             <Download className="w-4 h-4" />
-                            <span>Download</span>
+                            <span>{isPendingByMbid(album.mbid || album.rgMbid || "") ? "Downloading..." : "Download"}</span>
                         </button>
                     )}
                 </div>
@@ -254,7 +254,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                             tracks={combinedTracks}
                             album={album}
                             source={source || "discovery"}
-                            colors={colors}
                             onAddToPlaylist={handleAddToPlaylist}
                             previewTrack={previewTrack}
                             previewPlaying={previewPlaying}

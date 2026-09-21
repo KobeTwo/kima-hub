@@ -96,6 +96,13 @@ export default function ArtistPage() {
         );
     }
 
+    const downloadableAlbums = albums.filter(
+        (album) => album.availability !== "unavailable"
+    );
+    const showDownloadAll =
+        source === "discovery" || downloadableAlbums.length > 0;
+    const isPendingDownload = isPendingByMbid(artist.mbid || "");
+
     return (
         <div className="min-h-screen flex flex-col">
             <ArtistHero
@@ -108,32 +115,23 @@ export default function ArtistPage() {
                 onReload={reloadArtist}
             >
                 {/* Action bar inside hero for visual continuity */}
-                {(() => {
-                    const downloadableAlbums = albums.filter(
-                        (album) => album.availability !== "unavailable"
-                    );
-                    const showDownloadAll =
-                        source === "discovery" || downloadableAlbums.length > 0;
-                    if (!showDownloadAll) return null;
-                    const isPendingDownload = isPendingByMbid(artist.mbid || "");
-                    return (
-                        <button
-                            onClick={() => downloadArtist(artist)}
-                            disabled={isPendingDownload}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all",
-                                isPendingDownload
-                                    ? "bg-white/5 text-white/50 cursor-not-allowed"
-                                    : "bg-white/5 hover:bg-white/10 text-white/80 hover:text-white"
-                            )}
-                        >
-                            <Download className="w-4 h-4" />
-                            <span className="hidden sm:inline">
-                                {isPendingDownload ? "Downloading..." : "Download All"}
-                            </span>
-                        </button>
-                    );
-                })()}
+                {showDownloadAll && (
+                    <button
+                        onClick={() => downloadArtist(artist)}
+                        disabled={isPendingDownload}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all",
+                            isPendingDownload
+                                ? "bg-white/5 text-white/50 cursor-not-allowed"
+                                : "bg-white/5 hover:bg-white/10 text-white/80 hover:text-white"
+                        )}
+                    >
+                        <Download className="w-4 h-4" />
+                        <span className="hidden sm:inline">
+                            {isPendingDownload ? "Downloading..." : "Download All"}
+                        </span>
+                    </button>
+                )}
             </ArtistHero>
 
             {/* Main Content - fills remaining viewport height */}

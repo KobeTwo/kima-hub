@@ -61,7 +61,7 @@ export default function DeezerPlaylistDetailPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isImporting] = useState(false);
-    const [volume, _setVolume] = useState(1);
+    const volume = 1;
     const [isMuted, setIsMuted] = useState(false);
 
     const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);

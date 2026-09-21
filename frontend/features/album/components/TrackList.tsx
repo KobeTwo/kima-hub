@@ -3,14 +3,12 @@ import { Card } from "@/components/ui/Card";
 import { Pause, Plus, Volume2 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { Track, Album, AlbumSource } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
 
 interface TrackListProps {
     tracks: Track[];
     album: Album;
     source: AlbumSource;
-    colors: ColorPalette | null;
     onAddToPlaylist: (trackId: string) => void;
     previewTrack: string | null;
     previewPlaying: boolean;
