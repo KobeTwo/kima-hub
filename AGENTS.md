@@ -58,7 +58,7 @@ Browser → Next.js (port 3030) → Express API (port 3006) → PostgreSQL / Red
 
 ## Hard Rules
 
-- **Do not re-add**: vibe embeddings, CLAP audio analysis, MusiCNN mood/BPM detection, audio analyzer services, or any feature listed in `docs/skip-features.md`.
+- **Do not re-add**: vibe embeddings, CLAP audio analysis, MusiCNN mood/BPM detection, audio analyzer services, any audio playback (web player, Subsonic streaming, audiobook/podcast streaming, play tracking), or any feature listed in `docs/skip-features.md`.
 - **Do not add AI features** (OpenAI, LLM, embeddings for recommendations, etc.).
 - Keep local changes personal. Do not open PRs to upstream unless explicitly requested.
 - Run `bun run typecheck && bun run lint` (frontend) or `npm run typecheck` (backend) before marking work complete.
