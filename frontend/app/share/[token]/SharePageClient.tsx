@@ -202,7 +202,7 @@ export default function SharePageClient() {
                     </div>
 
                     {/* Track list */}
-                    {tracks.length > 1 && (
+                    {tracks.length > 0 && (
                         <div className="border-t border-white/[0.04] pt-4">
                             {tracks.map((track, index) => {
                                 const trackCoverId = track.album?.coverUrl || coverArtId;
