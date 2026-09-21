@@ -133,7 +133,6 @@ model DiscoveryTrack {
   filePath         String
   inPlaylistCount  Int            @default(0)
   userKept         Boolean        @default(false)
-  lastPlayedAt     DateTime?
   discoveryAlbum   DiscoveryAlbum @relation(fields: [discoveryAlbumId], references: [id], onDelete: Cascade)
 }
 
@@ -346,9 +345,6 @@ model SystemSettings {
   openaiBaseUrl               String?
   fanartEnabled               Boolean  @default(false)
   fanartApiKey                String?
-  audiobookshelfEnabled       Boolean  @default(false)
-  audiobookshelfUrl           String?  @default("http://localhost:13378")
-  audiobookshelfApiKey        String?
   soulseekUsername            String?
   soulseekPassword            String?
   soulseekMode                String?  @default("p2p")
@@ -362,7 +358,6 @@ model SystemSettings {
   autoEnrichMetadata          Boolean  @default(true)
   maxConcurrentDownloads      Int      @default(3)
   downloadRetryAttempts       Int      @default(3)
-  transcodeCacheMaxGb         Int      @default(10)
   downloadSource              String   @default("soulseek")
   primaryFailureFallback      String   @default("none")
   updatedAt                   DateTime @updatedAt
