@@ -14,7 +14,7 @@ router.get("/for-you", async (req, res) => {
         const { limit = "10" } = req.query;
         const limitNum = parseInt(limit as string, 10);
 
-        // Seed artists from the most recently added library albums
+        // Seed artists from the most recently synced library albums
         const recentAlbums = await prisma.album.findMany({
             where: {
                 location: "LIBRARY",

@@ -594,6 +594,8 @@ router.get("/artists/:id", async (req, res) => {
         const matchedTrack = tracksByExactTitle.get(exactKey) || tracksByNormTitle.get(normKey) || tracksByStrippedTitle.get(strippedKey);
 
         if (matchedTrack) {
+          // userPlayCount is no longer tracked (playback tracking was removed),
+          // so it is always 0 while Last.fm's public playCount still applies.
           combinedTracks.push({
             ...matchedTrack,
             playCount: lfmTrack.playcount ? parseInt(lfmTrack.playcount) : 0,

@@ -3,8 +3,7 @@
 //   library/scan.ts     -- scan, organize, corrupt-tracks
 //   library/artists.ts  -- artists, artist-counts, backfill-genres
 //   library/albums.ts   -- albums
-//   library/tracks.ts   -- tracks, recently-listened/added, genres, decades, radio
-//   library/streaming.ts -- audio streaming
+//   library/tracks.ts   -- tracks, recently-added, genres, decades, lyrics
 //   library/coverArt.ts -- cover art serving and color extraction
 //   library/backfill.ts -- image backfill
 export { default } from "./library/index";
