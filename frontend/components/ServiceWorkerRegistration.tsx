@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { applyIosDebugQueryFlag } from "@/lib/iosAudioLog";
 
 export function ServiceWorkerRegistration() {
     const [updateAvailable, setUpdateAvailable] = useState(false);
-
-    useEffect(() => {
-        applyIosDebugQueryFlag();
-    }, []);
 
     useEffect(() => {
         if (!("serviceWorker" in navigator)) return;
