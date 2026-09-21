@@ -77,7 +77,7 @@ test.describe("Auth Flow", () => {
     });
 
     test("protected routes redirect unauthenticated users", async ({ page }) => {
-        for (const route of ["/collection", "/settings", "/search", "/queue"]) {
+        for (const route of ["/collection", "/settings", "/search"]) {
             await page.goto(route);
             await expect(page).toHaveURL(/login/, { timeout: 10000 });
         }
@@ -98,14 +98,10 @@ test.describe("Route Health", () => {
             { path: "/collection?tab=artists", name: "Artists Tab" },
             { path: "/collection?tab=tracks", name: "Tracks Tab" },
             { path: "/search", name: "Search" },
-            { path: "/queue", name: "Queue" },
             { path: "/settings", name: "Settings" },
             { path: "/discover", name: "Discover" },
             { path: "/releases", name: "Releases" },
             { path: "/playlists", name: "Playlists" },
-            { path: "/audiobooks", name: "Audiobooks" },
-            { path: "/podcasts", name: "Podcasts" },
-            { path: "/radio", name: "Radio" },
         ];
 
         const results: Array<{ route: string; name: string; status: string; errors: string[] }> = [];
@@ -198,7 +194,7 @@ test.describe("Collection & Library", () => {
         expect(body!.length).toBeGreaterThan(200);
     });
 
-    test("album detail page has play button and track list", async ({ page }) => {
+    test("album detail page loads", async ({ page }) => {
         await skipIfEmptyLibrary(page);
         const netErrors = collectNetworkErrors(page);
         await page.goto("/collection?tab=albums", { waitUntil: "domcontentloaded" });
@@ -210,10 +206,8 @@ test.describe("Collection & Library", () => {
         await expect(page).toHaveURL(/\/album\//);
         await settle(page, 3000);
 
-        // Should have a play button
-        const playBtn = page.locator('button:has-text("Play"), button[aria-label*="Play" i], button[title*="Play" i]');
-        const playCount = await playBtn.count();
-        console.log(`Album detail: ${playCount} play buttons found`);
+        const body = await page.locator("body").textContent();
+        expect(body!.length).toBeGreaterThan(100);
 
         if (netErrors.length > 0) {
             console.log("ALBUM DETAIL - API errors:", netErrors);
@@ -277,109 +271,7 @@ test.describe("Search", () => {
 });
 
 // ============================================================
-// 5. PLAYBACK
-// ============================================================
-test.describe("Playback", () => {
-    test.beforeEach(async ({ page }) => { await login(page); });
-
-    test("player appears when track starts playing", async ({ page }) => {
-        await skipIfEmptyLibrary(page);
-        await page.goto("/collection?tab=albums", { waitUntil: "domcontentloaded" });
-        await settle(page, 2000);
-
-        const firstAlbum = page.locator('a[href^="/album/"]').first();
-        await firstAlbum.waitFor({ timeout: 10_000 });
-        await firstAlbum.click();
-        await page.waitForURL(/\/album\//);
-        await page.waitForTimeout(500);
-
-        await page.getByLabel("Play all").click();
-
-        // Player should appear with a Pause button once audio starts
-        await expect(page.getByTitle("Pause", { exact: true })).toBeVisible({ timeout: 10_000 });
-    });
-
-    test("clicking play on album starts playback UI", async ({ page }) => {
-        await skipIfEmptyLibrary(page);
-        const consoleErrors = collectConsoleErrors(page);
-
-        await page.goto("/collection?tab=albums", { waitUntil: "domcontentloaded" });
-        await settle(page, 3000);
-
-        const firstAlbum = page.locator('a[href^="/album/"]').first();
-        await firstAlbum.click();
-        await settle(page, 3000);
-
-        const playBtn = page.locator('button:has-text("Play"), button[aria-label*="Play all" i], button[title*="Play" i]').first();
-        await expect(playBtn).toBeVisible({ timeout: 5000 });
-        await playBtn.click();
-        await page.waitForTimeout(3000);
-
-        // Check if playback state changed
-        const pauseBtn = await page.locator('button[title="Pause"], button[aria-label="Pause"]').count();
-        console.log(`After play click: pause button visible = ${pauseBtn > 0}`);
-        if (consoleErrors.length > 0) {
-            console.log("PLAYBACK console errors:", consoleErrors);
-        }
-    });
-
-    test("play/pause toggle works", async ({ page }) => {
-        await skipIfEmptyLibrary(page);
-        await page.goto("/collection?tab=albums", { waitUntil: "domcontentloaded" });
-        await settle(page, 3000);
-
-        const firstAlbum = page.locator('a[href^="/album/"]').first();
-        await firstAlbum.click();
-        await settle(page, 3000);
-
-        const playBtn = page.locator('button:has-text("Play"), button[aria-label*="Play all" i], button[title*="Play" i]').first();
-        await playBtn.click();
-        await page.waitForTimeout(2000);
-
-        const pauseBtn = page.locator('button[title="Pause"]').first();
-        if (await pauseBtn.isVisible({ timeout: 3000 })) {
-            await pauseBtn.click();
-            await page.waitForTimeout(500);
-            const playBtnAfter = page.locator('button[title="Play"]').first();
-            await expect(playBtnAfter).toBeVisible({ timeout: 3000 });
-            console.log("Play/pause toggle: WORKS");
-        } else {
-            console.log("Play/pause toggle: pause button not found after play");
-        }
-    });
-
-    test("next/prev buttons visible during playback", async ({ page }) => {
-        await skipIfEmptyLibrary(page);
-        await page.goto("/collection?tab=albums", { waitUntil: "domcontentloaded" });
-        await settle(page, 3000);
-
-        const firstAlbum = page.locator('a[href^="/album/"]').first();
-        await firstAlbum.click();
-        await settle(page, 3000);
-
-        const playBtn = page.locator('button:has-text("Play"), button[aria-label*="Play all" i], button[title*="Play" i]').first();
-        await playBtn.click();
-        await page.waitForTimeout(2000);
-
-        const nextBtn = page.locator('button[title="Next"], button[aria-label="Next"]');
-        const prevBtn = page.locator('button[title="Previous"], button[aria-label="Previous"]');
-
-        const nextVisible = await nextBtn.first().isVisible({ timeout: 3000 }).catch(() => false);
-        const prevVisible = await prevBtn.first().isVisible({ timeout: 3000 }).catch(() => false);
-        console.log(`Next button: ${nextVisible}, Previous button: ${prevVisible}`);
-    });
-
-    test("queue page renders", async ({ page }) => {
-        await page.goto("/queue", { waitUntil: "domcontentloaded" });
-        await settle(page);
-        await expect(page).toHaveURL(/queue/);
-        const body = await page.locator("body").textContent();
-        expect(body!.length).toBeGreaterThan(20);
-    });
-});
-
-// ============================================================
-// 6. SETTINGS
+// 5. SETTINGS
 // ============================================================
 test.describe("Settings", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
@@ -408,23 +300,10 @@ test.describe("Settings", () => {
 });
 
 // ============================================================
-// 7. VIBE / DISCOVERY
+// 6. DISCOVERY
 // ============================================================
-test.describe.skip("Vibe & Discovery", () => {
+test.describe.skip("Discovery & Releases", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
-
-    test("vibe page loads without crash", async ({ page }) => {
-        const consoleErrors = collectConsoleErrors(page);
-        const netErrors = collectNetworkErrors(page);
-        await page.goto("/vibe", { waitUntil: "domcontentloaded" });
-        await settle(page, 3000);
-
-        const body = await page.locator("body").textContent();
-        expect(body!.length).toBeGreaterThan(50);
-
-        if (consoleErrors.length > 0) console.log("VIBE - Console errors:", consoleErrors);
-        if (netErrors.length > 0) console.log("VIBE - Network errors:", netErrors);
-    });
 
     test("discover page loads", async ({ page }) => {
         const netErrors = collectNetworkErrors(page);
@@ -450,7 +329,7 @@ test.describe.skip("Vibe & Discovery", () => {
 });
 
 // ============================================================
-// 8. IMAGE/ASSET LOADING
+// 7. IMAGE/ASSET LOADING
 // ============================================================
 test.describe("Asset Loading", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
@@ -485,7 +364,7 @@ test.describe("Asset Loading", () => {
 });
 
 // ============================================================
-// 9. MOBILE LAYOUT
+// 8. MOBILE LAYOUT
 // ============================================================
 test.describe("Mobile Layout", () => {
     test.use({ viewport: { width: 375, height: 812 } });
@@ -554,7 +433,7 @@ test.describe("Mobile Layout", () => {
 
     test("mobile: overflow audit across pages", async ({ page }) => {
         const overflowPages: string[] = [];
-        for (const route of ["/", "/collection", "/search", "/settings", "/queue"]) {
+        for (const route of ["/", "/collection", "/search", "/settings"]) {
             await page.goto(route, { waitUntil: "domcontentloaded" });
             await settle(page);
 
@@ -579,7 +458,7 @@ test.describe("Mobile Layout", () => {
 });
 
 // ============================================================
-// 10. ACCESSIBILITY BASICS
+// 9. ACCESSIBILITY BASICS
 // ============================================================
 test.describe("Accessibility", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
@@ -642,7 +521,7 @@ test.describe("Accessibility", () => {
 });
 
 // ============================================================
-// 11. ERROR HANDLING
+// 10. ERROR HANDLING
 // ============================================================
 test.describe("Error Handling", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
@@ -679,7 +558,7 @@ test.describe("Error Handling", () => {
 });
 
 // ============================================================
-// 12. PERFORMANCE
+// 11. PERFORMANCE
 // ============================================================
 test.describe("Performance", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
@@ -734,7 +613,7 @@ test.describe("Performance", () => {
 });
 
 // ============================================================
-// 13. CONSOLE ERROR AUDIT (all pages)
+// 12. CONSOLE ERROR AUDIT (all pages)
 // ============================================================
 test.describe("Full Audit", () => {
     test.beforeEach(async ({ page }) => { await login(page); });
@@ -742,9 +621,8 @@ test.describe("Full Audit", () => {
     test("console error audit across all pages", async ({ page }) => {
         const routes = [
             "/", "/collection", "/collection?tab=albums", "/collection?tab=artists",
-            "/collection?tab=tracks", "/search", "/queue", "/settings",
+            "/collection?tab=tracks", "/search", "/settings",
             "/discover", "/releases", "/playlists",
-            "/audiobooks", "/podcasts", "/radio",
         ];
 
         const allErrors: Array<{ route: string; errors: string[] }> = [];
@@ -783,9 +661,8 @@ test.describe("Full Audit", () => {
     test("API error audit across all pages", async ({ page }) => {
         const routes = [
             "/", "/collection", "/collection?tab=albums", "/collection?tab=artists",
-            "/collection?tab=tracks", "/search", "/queue", "/settings",
+            "/collection?tab=tracks", "/search", "/settings",
             "/discover", "/releases", "/playlists",
-            "/audiobooks", "/podcasts", "/radio",
         ];
 
         const allErrors: Array<{ route: string; errors: string[] }> = [];

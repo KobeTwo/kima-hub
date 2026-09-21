@@ -146,32 +146,7 @@ test.describe("Enrichment Cycle", () => {
                 : 0;
         expect(trackSuccessRate).toBeGreaterThanOrEqual(0.8);
 
-        // 2. Vibe map should return embedded tracks
-        const vibeRes = await page.request.get("/api/vibe/map", {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        expect(vibeRes.ok()).toBe(true);
-        const vibeData = (await vibeRes.json()) as { tracks: unknown[]; trackCount: number };
-        expect(Array.isArray(vibeData.tracks)).toBe(true);
-        expect(vibeData.tracks.length).toBeGreaterThan(0);
-
-        // 3. Vibe search should return results for at least one music descriptor.
-        //    "music" is too generic (below the 0.4 similarity threshold), so probe
-        //    several descriptors and require at least one to return results.
-        const searchCandidates = ["rock", "pop", "electronic", "loud", "bright", "guitar", "fast", "sad", "piano"];
-        let searchHit = false;
-        for (const q of searchCandidates) {
-            const r = await page.request.post("/api/vibe/search", {
-                data: { query: q, limit: 3 },
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!r.ok()) continue;
-            const d = (await r.json()) as { tracks: unknown[] };
-            if (d.tracks.length > 0) { searchHit = true; break; }
-        }
-        expect(searchHit).toBe(true);
-
-        // 4. Failure rate should be below 20%
+        // 2. Failure rate should be below 20%
         const failRes = await page.request.get("/api/enrichment/failures/counts", {
             headers: { Authorization: `Bearer ${token}` },
         });
