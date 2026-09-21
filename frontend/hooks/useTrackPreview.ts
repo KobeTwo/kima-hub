@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
-import { useAudioController } from "@/lib/audio-controller-context";
-import { useAudioState } from "@/lib/audio-state-context";
 
 interface PreviewableTrack {
     id: string;
@@ -11,20 +9,13 @@ interface PreviewableTrack {
 }
 
 export function useTrackPreview<T extends PreviewableTrack>() {
-    const controller = useAudioController();
     const { toast } = useToast();
-    const { volume, isMuted } = useAudioState();
     const [previewTrack, setPreviewTrack] = useState<string | null>(null);
     const [previewPlaying, setPreviewPlaying] = useState(false);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-    const mainPlayerWasPausedRef = useRef(false);
     const noPreviewTrackIdsRef = useRef<Set<string>>(new Set());
     const toastShownForNoPreviewRef = useRef<Set<string>>(new Set());
     const inFlightTrackIdRef = useRef<string | null>(null);
-
-    const applyCurrentPlayerVolume = useCallback((audio: HTMLAudioElement) => {
-        audio.volume = isMuted ? 0 : volume;
-    }, [volume, isMuted]);
 
     const isAbortError = (err: unknown) => {
         if (!err || typeof err !== "object") return false;
@@ -71,7 +62,6 @@ export function useTrackPreview<T extends PreviewableTrack>() {
         // If the same track is paused, resume it
         if (previewTrack === track.id && !previewPlaying && previewAudioRef.current) {
             try {
-                applyCurrentPlayerVolume(previewAudioRef.current);
                 await previewAudioRef.current.play();
             } catch (err: unknown) {
                 if (isAbortError(err)) return;
@@ -98,13 +88,7 @@ export function useTrackPreview<T extends PreviewableTrack>() {
 
             const streamUrl = api.getTrackPreviewStreamUrl(artistName, track.title);
 
-            if (controller?.isPlaying()) {
-                controller.pause();
-                mainPlayerWasPausedRef.current = true;
-            }
-
             const audio = new Audio(streamUrl);
-            applyCurrentPlayerVolume(audio);
             previewAudioRef.current = audio;
 
             audio.onended = () => {
@@ -112,10 +96,6 @@ export function useTrackPreview<T extends PreviewableTrack>() {
                 setPreviewPlaying(false);
                 setPreviewTrack(null);
                 previewAudioRef.current = null;
-                if (mainPlayerWasPausedRef.current) {
-                    controller?.play();
-                    mainPlayerWasPausedRef.current = false;
-                }
             };
 
             audio.onerror = () => {
@@ -125,10 +105,6 @@ export function useTrackPreview<T extends PreviewableTrack>() {
                 setPreviewPlaying(false);
                 setPreviewTrack(null);
                 previewAudioRef.current = null;
-                if (mainPlayerWasPausedRef.current) {
-                    controller?.play();
-                    mainPlayerWasPausedRef.current = false;
-                }
             };
 
             try {
@@ -154,47 +130,13 @@ export function useTrackPreview<T extends PreviewableTrack>() {
     };
 
     useEffect(() => {
-        if (previewAudioRef.current) {
-            applyCurrentPlayerVolume(previewAudioRef.current);
-        }
-    }, [applyCurrentPlayerVolume]);
-
-    useEffect(() => {
-        const stopPreview = () => {
-            if (previewAudioRef.current) {
-                teardownPreviewAudio(previewAudioRef.current);
-                previewAudioRef.current = null;
-                setPreviewPlaying(false);
-                setPreviewTrack(null);
-                mainPlayerWasPausedRef.current = false;
-            }
-        };
-
-        // Stop the preview whenever the main player starts playing.
-        let prevStatus: string | null = null;
-        const unsubscribe = controller?.subscribe((snap) => {
-            if (snap.status === "playing" && prevStatus !== "playing") {
-                stopPreview();
-            }
-            prevStatus = snap.status;
-        });
-        return () => {
-            unsubscribe?.();
-        };
-    }, [controller, teardownPreviewAudio]);
-
-    useEffect(() => {
         return () => {
             if (previewAudioRef.current) {
                 teardownPreviewAudio(previewAudioRef.current);
                 previewAudioRef.current = null;
             }
-            if (mainPlayerWasPausedRef.current) {
-                controller?.play();
-                mainPlayerWasPausedRef.current = false;
-            }
         };
-    }, [controller, teardownPreviewAudio]);
+    }, [teardownPreviewAudio]);
 
     return {
         previewTrack,

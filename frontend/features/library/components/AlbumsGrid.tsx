@@ -4,12 +4,11 @@ import { Album } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { CachedImage } from "@/components/ui/CachedImage";
-import { Disc3, Play, Trash2 } from "lucide-react";
+import { Disc3, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface AlbumsGridProps {
     albums: Album[];
-    onPlay: (albumId: string) => Promise<void>;
     onDelete: (albumId: string, albumTitle: string) => void;
     isLoading?: boolean;
 }
@@ -17,7 +16,6 @@ interface AlbumsGridProps {
 interface AlbumCardItemProps {
     album: Album;
     index: number;
-    onPlay: (albumId: string) => Promise<void>;
     onDelete: (albumId: string, albumTitle: string) => void;
 }
 
@@ -25,17 +23,8 @@ const AlbumCardItem = memo(
     function AlbumCardItem({
         album,
         index,
-        onPlay,
         onDelete,
     }: AlbumCardItemProps) {
-        const handlePlay = useCallback(
-            (e: React.MouseEvent) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onPlay(album.id);
-            },
-            [album.id, onPlay],
-        );
         const handleDelete = useCallback(
             (e: React.MouseEvent) => {
                 e.preventDefault();
@@ -78,14 +67,6 @@ const AlbumCardItem = memo(
                         {/* Gradient overlay on hover */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                        {/* Play button */}
-                        <button
-                            onClick={handlePlay}
-                            className="absolute bottom-3 right-3 w-11 h-11 rounded-lg bg-[#22c55e] flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 hover:bg-[#16a34a]"
-                        >
-                            <Play className="w-5 h-5 fill-current ml-0.5 text-black" />
-                        </button>
-
                         {/* Delete button */}
                         <button
                             onClick={handleDelete}
@@ -119,7 +100,6 @@ const AlbumCardItem = memo(
 
 const AlbumsGrid = memo(function AlbumsGrid({
     albums,
-    onPlay,
     onDelete,
     isLoading = false,
 }: AlbumsGridProps) {
@@ -151,7 +131,6 @@ const AlbumsGrid = memo(function AlbumsGrid({
                     key={album.id}
                     album={album}
                     index={index}
-                    onPlay={onPlay}
                     onDelete={onDelete}
                 />
             ))}

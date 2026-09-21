@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Music, Play, Trash2 } from "lucide-react";
+import { Music, Trash2 } from "lucide-react";
 import { Artist } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
@@ -9,7 +9,6 @@ import { api } from "@/lib/api";
 
 interface ArtistsGridProps {
     artists: Artist[];
-    onPlay: (artistId: string) => Promise<void>;
     onDelete: (artistId: string, artistName: string) => void;
     isLoading?: boolean;
 }
@@ -22,7 +21,6 @@ const getArtistImageSrc = (coverArt?: string): string | null => {
 interface ArtistCardItemProps {
     artist: Artist;
     index: number;
-    onPlay: (artistId: string) => Promise<void>;
     onDelete: (artistId: string, artistName: string) => void;
 }
 
@@ -30,17 +28,8 @@ const ArtistCardItem = memo(
     function ArtistCardItem({
         artist,
         index,
-        onPlay,
         onDelete,
     }: ArtistCardItemProps) {
-        const handlePlay = useCallback(
-            (e: React.MouseEvent) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onPlay(artist.id);
-            },
-            [artist.id, onPlay],
-        );
         const handleDelete = useCallback(
             (e: React.MouseEvent) => {
                 e.preventDefault();
@@ -83,14 +72,6 @@ const ArtistCardItem = memo(
                         {/* Gradient overlay on hover */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                        {/* Play button */}
-                        <button
-                            onClick={handlePlay}
-                            className="absolute bottom-3 right-3 w-11 h-11 rounded-lg bg-[#ec4899] flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 hover:bg-[#db2777]"
-                        >
-                            <Play className="w-5 h-5 fill-current ml-0.5 text-white" />
-                        </button>
-
                         {/* Delete button */}
                         <button
                             onClick={handleDelete}
@@ -124,7 +105,6 @@ const ArtistCardItem = memo(
 
 const ArtistsGrid = memo(function ArtistsGrid({
     artists,
-    onPlay,
     onDelete,
     isLoading = false,
 }: ArtistsGridProps) {
@@ -156,7 +136,6 @@ const ArtistsGrid = memo(function ArtistsGrid({
                     key={artist.id}
                     artist={artist}
                     index={index}
-                    onPlay={onPlay}
                     onDelete={onDelete}
                 />
             ))}

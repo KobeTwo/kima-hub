@@ -19,8 +19,6 @@ import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { useAudioState } from "@/lib/audio-state-context";
-import { useAudioControls } from "@/lib/audio-controls-context";
 
 const DeezerIcon = ({ className }: { className?: string }) => (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -63,8 +61,8 @@ export default function DeezerPlaylistDetailPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isImporting] = useState(false);
-    const { volume, isMuted } = useAudioState();
-    const { toggleMute } = useAudioControls();
+    const [volume, _setVolume] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
 
     const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
     const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
@@ -178,7 +176,7 @@ export default function DeezerPlaylistDetailPage() {
     };
 
     const handleToggleMute = () => {
-        toggleMute();
+        setIsMuted((v) => !v);
         if (audioRef.current) {
             applyCurrentPlayerVolume(audioRef.current);
         }

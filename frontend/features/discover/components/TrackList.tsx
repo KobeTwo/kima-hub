@@ -1,5 +1,4 @@
-import { useRef } from "react";
-import { Play, Heart, Music } from "lucide-react";
+import { Heart, Music } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/utils/cn";
 import { DiscoverTrack } from "../types";
@@ -9,23 +8,13 @@ import { tierColors, tierLabels } from "../constants";
 
 interface TrackListProps {
     tracks: DiscoverTrack[];
-    currentTrack?: { id: string } | null;
-    isPlaying: boolean;
-    onPlayTrack: (index: number) => void;
-    onTogglePlay: () => void;
     onLike: (track: DiscoverTrack) => void;
 }
 
 export function TrackList({
     tracks,
-    currentTrack,
-    isPlaying,
-    onPlayTrack,
-    onTogglePlay,
     onLike,
 }: TrackListProps) {
-    const lastTapRef = useRef<{ time: number; index: number }>({ time: 0, index: -1 });
-
     return (
         <div className="w-full">
             {/* Table Header */}
@@ -40,68 +29,18 @@ export function TrackList({
             {/* Track Rows */}
             <div>
                 {tracks.map((track, index) => {
-                    const isTrackPlaying = currentTrack?.id === track.id;
                     return (
                         <div
                             key={track.id}
-                            data-track-index={index}
-                            onDoubleClick={() => {
-                                if (isTrackPlaying && isPlaying) {
-                                    onTogglePlay();
-                                } else {
-                                    onPlayTrack(index);
-                                }
-                            }}
-                            onTouchEnd={(e) => {
-                                const idx = Number(e.currentTarget.dataset.trackIndex);
-                                if (isNaN(idx)) return;
-                                const now = Date.now();
-                                if (now - lastTapRef.current.time < 300 && lastTapRef.current.index === idx) {
-                                    if (isTrackPlaying && isPlaying) {
-                                        onTogglePlay();
-                                    } else {
-                                        onPlayTrack(idx);
-                                    }
-                                    lastTapRef.current = { time: 0, index: -1 };
-                                } else {
-                                    lastTapRef.current = { time: now, index: idx };
-                                }
-                            }}
                             className={cn(
-                                "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
-                                isTrackPlaying && "bg-white/10"
+                                "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group touch-manipulation"
                             )}
                         >
-                            {/* Track Number / Play Button */}
+                            {/* Track Number */}
                             <div className="flex items-center justify-center">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isTrackPlaying && isPlaying) {
-                                            onTogglePlay();
-                                        } else {
-                                            onPlayTrack(index);
-                                        }
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center"
-                                    aria-label={isTrackPlaying && isPlaying ? "Pause" : "Play"}
-                                >
-                                    <span
-                                        className={cn(
-                                            "group-hover:hidden text-sm",
-                                            isTrackPlaying
-                                                ? "text-brand"
-                                                : "text-gray-400"
-                                        )}
-                                    >
-                                        {isTrackPlaying && isPlaying ? (
-                                            <Music className="w-4 h-4 text-brand animate-pulse" />
-                                        ) : (
-                                            index + 1
-                                        )}
-                                    </span>
-                                    <Play className="w-4 h-4 text-white hidden group-hover:block" />
-                                </button>
+                                <span className="text-sm text-gray-400">
+                                    {index + 1}
+                                </span>
                             </div>
 
                             {/* Title + Artist */}
@@ -126,14 +65,7 @@ export function TrackList({
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <p
-                                        className={cn(
-                                            "text-sm font-medium truncate",
-                                            isTrackPlaying
-                                                ? "text-brand"
-                                                : "text-white"
-                                        )}
-                                    >
+                                    <p className="text-sm font-medium truncate text-white">
                                         {track.title}
                                     </p>
                                     <p className="text-xs text-gray-400 truncate">

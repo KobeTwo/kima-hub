@@ -1,11 +1,9 @@
 import { useCallback } from "react";
-import { useAudio } from "@/lib/audio-context";
 import { useToast } from "@/lib/toast-context";
 import { api } from "@/lib/api";
-import { DiscoverTrack, DiscoverPlaylist } from "../types";
+import { DiscoverTrack } from "../types";
 
 export function useDiscoverActions(
-    playlist: DiscoverPlaylist | null,
     onGenerationComplete?: () => void,
     isGenerating?: boolean,
     refreshBatchStatus?: () => Promise<unknown>,
@@ -14,7 +12,6 @@ export function useDiscoverActions(
     updateTrackLiked?: (albumId: string, isLiked: boolean) => void
 ) {
     const { toast } = useToast();
-    const { playTracks, isPlaying, pause, resumeWithGesture } = useAudio();
 
     const handleGenerate = useCallback(async () => {
         if (isGenerating) {
@@ -56,10 +53,10 @@ export function useDiscoverActions(
     const handleLike = useCallback(
         async (track: DiscoverTrack) => {
             const newLikedState = !track.isLiked;
-            
+
             // Optimistically update UI immediately
             updateTrackLiked?.(track.albumId, newLikedState);
-            
+
             try {
                 if (track.isLiked) {
                     await api.unlikeDiscoverAlbum(track.albumId);
@@ -81,49 +78,8 @@ export function useDiscoverActions(
         [toast, onGenerationComplete, updateTrackLiked]
     );
 
-    const formatPlaylistTracks = useCallback(() => {
-        if (!playlist || playlist.tracks.length === 0) return null;
-        return playlist.tracks.map((track) => ({
-            id: track.id,
-            title: track.title,
-            artist: { name: track.artist },
-            album: {
-                id: track.albumId,
-                title: track.album,
-                coverArt: track.coverUrl || undefined,
-            },
-            duration: track.duration || 0,
-        }));
-    }, [playlist]);
-
-    const handlePlayPlaylist = useCallback(() => {
-        const formattedTracks = formatPlaylistTracks();
-        if (!formattedTracks) return;
-        playTracks(formattedTracks, 0);
-    }, [formatPlaylistTracks, playTracks]);
-
-    const handlePlayTrack = useCallback(
-        (index: number) => {
-            const formattedTracks = formatPlaylistTracks();
-            if (!formattedTracks) return;
-            playTracks(formattedTracks, index);
-        },
-        [formatPlaylistTracks, playTracks]
-    );
-
-    const handleTogglePlay = useCallback(() => {
-        if (isPlaying) {
-            pause();
-        } else {
-            resumeWithGesture();
-        }
-    }, [isPlaying, pause, resumeWithGesture]);
-
     return {
         handleGenerate,
         handleLike,
-        handlePlayPlaylist,
-        handlePlayTrack,
-        handleTogglePlay,
     };
 }

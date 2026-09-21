@@ -6,7 +6,6 @@ import { RefreshCw } from "lucide-react";
 import { useToast } from "@/lib/toast-context";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { useAudioState, useAudioPlayback } from "@/lib/audio-context";
 import { useDiscoverData } from "@/features/discover/hooks/useDiscoverData";
 import { useDiscoverActions } from "@/features/discover/hooks/useDiscoverActions";
 import { usePreviewPlayer } from "@/features/discover/hooks/usePreviewPlayer";
@@ -20,9 +19,6 @@ import { DiscoverSettingsTab } from "@/components/activity/DiscoverSettingsTab";
 import { api } from "@/lib/api";
 
 export default function DiscoverWeeklyPage() {
-    // Use split hooks to avoid re-renders from currentTime updates
-    const { currentTrack } = useAudioState();
-    const { isPlaying } = useAudioPlayback();
     const { setSettingsContent, settingsOwner } = useActivityPanelSettings();
     const queryClient = useQueryClient();
 
@@ -31,10 +27,7 @@ export default function DiscoverWeeklyPage() {
     const {
         handleGenerate,
         handleLike,
-        handlePlayPlaylist,
-        handlePlayTrack,
-        handleTogglePlay,
-    } = useDiscoverActions(playlist, reloadData, isGenerating, refreshBatchStatus, setPendingGeneration, markGenerationStart, updateTrackLiked);
+    } = useDiscoverActions(reloadData, isGenerating, refreshBatchStatus, setPendingGeneration, markGenerationStart, updateTrackLiked);
     const { currentPreview, handleTogglePreview } = usePreviewPlayer();
     const [retryingUnavailable, setRetryingUnavailable] = useState(false);
     const { toast } = useToast();
@@ -67,11 +60,6 @@ export default function DiscoverWeeklyPage() {
             setRetryingUnavailable(false);
         }
     };
-
-    // Check if we're playing from this playlist
-    const isPlaylistPlaying = playlist?.tracks.some(
-        (t) => t.id === currentTrack?.id
-    );
 
     // Build discover settings element (stable across renders via the effect dep array)
     const discoverSettingsRef = useRef<React.ReactNode>(null);
@@ -197,10 +185,6 @@ export default function DiscoverWeeklyPage() {
                 />
 
                 <DiscoverActionBar
-                    playlist={playlist}
-                    isPlaylistPlaying={isPlaylistPlaying || false}
-                    isPlaying={isPlaying}
-                    onPlayToggle={isPlaylistPlaying && isPlaying ? handleTogglePlay : handlePlayPlaylist}
                     isGenerating={isGenerating}
                     onCancelGeneration={handleCancelGeneration}
                 />
@@ -221,10 +205,6 @@ export default function DiscoverWeeklyPage() {
                                     </h2>
                                     <TrackList
                                         tracks={playlist.tracks}
-                                        currentTrack={currentTrack}
-                                        isPlaying={isPlaying}
-                                        onPlayTrack={handlePlayTrack}
-                                        onTogglePlay={handleTogglePlay}
                                         onLike={handleLike}
                                     />
                                 </section>

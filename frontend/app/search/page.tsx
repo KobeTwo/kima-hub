@@ -9,8 +9,6 @@ import { SearchFilters } from "@/features/search/components/SearchFilters";
 import { TopResult } from "@/features/search/components/TopResult";
 import { EmptyState } from "@/features/search/components/EmptyState";
 import { LibraryAlbumsGrid } from "@/features/search/components/LibraryAlbumsGrid";
-import { LibraryPodcastsGrid } from "@/features/search/components/LibraryPodcastsGrid";
-import { LibraryAudiobooksGrid } from "@/features/search/components/LibraryAudiobooksGrid";
 import { LibraryTracksList } from "@/features/search/components/LibraryTracksList";
 import { SimilarArtistsGrid } from "@/features/search/components/SimilarArtistsGrid";
 import { AliasResolutionBanner } from "@/features/search/components/AliasResolutionBanner";
@@ -283,36 +281,6 @@ export default function SearchPage() {
                                 </section>
                             )}
 
-                        {/* Podcasts Grid */}
-                        {hasSearched &&
-                            showLibrary &&
-                            (libraryResults?.podcasts?.length ?? 0) > 0 && (
-                                <section>
-                                    <h2 className="text-2xl font-black tracking-tight flex items-center gap-3 mb-6">
-                                        <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full" />
-                                        Podcasts
-                                    </h2>
-                                    <LibraryPodcastsGrid
-                                        podcasts={libraryResults!.podcasts!}
-                                    />
-                                </section>
-                            )}
-
-                        {/* Audiobooks Grid */}
-                        {hasSearched &&
-                            showLibrary &&
-                            (libraryResults?.audiobooks?.length ?? 0) > 0 && (
-                                <section>
-                                    <h2 className="text-2xl font-black tracking-tight flex items-center gap-3 mb-6">
-                                        <span className="w-1 h-8 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full" />
-                                        Audiobooks
-                                    </h2>
-                                    <LibraryAudiobooksGrid
-                                        audiobooks={libraryResults!.audiobooks!}
-                                    />
-                                </section>
-                            )}
-
                         {/* Related Artists */}
                         {hasSearched &&
                             showDiscover &&
@@ -335,13 +303,10 @@ export default function SearchPage() {
                     !isLoading &&
                     !topArtist &&
                     soulseekResults.length === 0 &&
-                    (!libraryResults ||
-                        (!libraryResults.artists?.length &&
-                            !libraryResults.albums?.length &&
-                            !libraryResults.tracks?.length &&
-                            !libraryResults.podcasts?.length &&
-                            !libraryResults.audiobooks?.length &&
-                            !libraryResults.episodes?.length)) && (
+                        (!libraryResults ||
+                            (!libraryResults.artists?.length &&
+                                !libraryResults.albums?.length &&
+                                !libraryResults.tracks?.length)) && (
                         <div className="flex flex-col items-center justify-center py-32 text-center animate-fade-in">
                             <div className="relative mb-8">
                                 <SearchIcon className="w-20 h-20 text-gray-800" />

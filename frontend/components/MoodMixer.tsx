@@ -2,11 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, MoodType, MoodBucketPreset } from "@/lib/api";
-import { useAudioControls } from "@/lib/audio-controls-context";
-import { Track } from "@/lib/audio-state-context";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-    Play,
     Loader2,
     AudioWaveform,
     X,
@@ -108,7 +105,6 @@ const MOOD_ORDER: MoodType[] = [
 
 export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
     const { toast } = useToast();
-    const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [presets, setPresets] = useState<MoodBucketPreset[]>([]);
     const [loading, setLoading] = useState(true);
@@ -146,28 +142,10 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
             const mix = await api.getMoodBucketMix(mood);
 
             if (mix.tracks && mix.tracks.length > 0) {
-                const tracks: Track[] = mix.tracks.map((t) => ({
-                    id: t.id,
-                    title: t.title,
-                    artist: {
-                        name: t.album?.artist?.name || "Unknown Artist",
-                        id: t.album?.artist?.id,
-                    },
-                    album: {
-                        title: t.album?.title || "Unknown Album",
-                        coverArt: t.album?.coverUrl,
-                        id: t.albumId,
-                    },
-                    duration: t.duration,
-                }));
-
-                // Start playback
-                playTracks(tracks, 0);
-
                 // Save as user's active mood mix
                 await api.saveMoodBucketMix(mood);
 
-                toast.success(`${config.label} Mix - Playing ${tracks.length} tracks`);
+                toast.success(`${config.label} Mix - ${mix.tracks.length} tracks`);
 
                 // Force immediate refetch of mixes on home page
                 // Using refetchQueries instead of invalidateQueries for immediate update
@@ -294,17 +272,8 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
                                             {trackCount}
                                         </span>
 
-                                        {/* Hover overlay with play icon */}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            {!isGenerating && !isDisabled && (
-                                                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                                    <Play
-                                                        className="w-6 h-6 text-white ml-0.5"
-                                                        fill="currentColor"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
+                                        {/* Hover overlay */}
+                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </button>
                                 );
                             })}

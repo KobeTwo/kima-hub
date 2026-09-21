@@ -10,7 +10,6 @@ import { SectionHeader } from "@/features/home/components/SectionHeader";
 interface DiscographyProps {
     albums: Album[];
     colors: ColorPalette | null;
-    onPlayAlbum: (albumId: string, albumTitle: string) => Promise<void>;
     sortBy: "year" | "dateAdded";
     onSortChange: (sortBy: "year" | "dateAdded") => void;
 }
@@ -18,7 +17,6 @@ interface DiscographyProps {
 export function Discography({
     albums,
     colors,
-    onPlayAlbum,
     sortBy,
     onSortChange,
 }: DiscographyProps) {
@@ -73,7 +71,7 @@ export function Discography({
                             badge="owned"
                             circular={false}
                             colors={colors}
-                            onPlay={() => onPlayAlbum(album.id, album.title)}
+                            showPlayButton={false}
                             tvCardIndex={index}
                         />
                     );
