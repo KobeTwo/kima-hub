@@ -631,24 +631,6 @@ class ApiClient {
         const baseUrl = this.getBaseUrl();
         const token = includeToken ? this.getCurrentToken() : null;
 
-        // Check if this is an audiobook cover path (served by audiobooks endpoint, not proxied)
-        if (coverId && coverId.startsWith("/audiobooks/")) {
-            const url = `${baseUrl}/api${coverId}`;
-            if (token) {
-                return `${url}?token=${encodeURIComponent(token)}`;
-            }
-            return url;
-        }
-
-        // Check if this is a podcast cover path (served by podcasts endpoint, not proxied)
-        if (coverId && coverId.startsWith("/podcasts/")) {
-            const url = `${baseUrl}/api${coverId}`;
-            if (token) {
-                return `${url}?token=${encodeURIComponent(token)}`;
-            }
-            return url;
-        }
-
         // Check if coverId is an external URL (needs to be proxied)
         // Also handle native: paths which need URL encoding
         if (
