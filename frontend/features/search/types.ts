@@ -18,36 +18,6 @@ export interface Album {
     };
 }
 
-export interface Podcast {
-    id: string;
-    title: string;
-    author?: string;
-    imageUrl?: string;
-    episodeCount?: number;
-}
-
-export interface Episode {
-    id: string;
-    title: string;
-    description?: string | null;
-    podcastId: string;
-    podcastTitle: string;
-    publishedAt: Date | string;
-    duration: number;
-    audioUrl: string;
-}
-
-export interface Audiobook {
-    id: string;
-    title: string;
-    author?: string | null;
-    narrator?: string | null;
-    series?: string | null;
-    description?: string | null;
-    coverUrl?: string | null;
-    duration?: number | null;
-}
-
 export interface LibraryTrack {
     id: string;
     title: string;
@@ -73,14 +43,11 @@ export interface LibraryTrack {
 export interface SearchResult {
     artists?: Artist[];
     albums?: Album[];
-    podcasts?: Podcast[];
     tracks?: LibraryTrack[];
-    audiobooks?: Audiobook[];
-    episodes?: Episode[];
 }
 
 export interface DiscoverResult {
-    type: "music" | "podcast";
+    type: "music";
     id?: string;
     name: string;
     mbid?: string;

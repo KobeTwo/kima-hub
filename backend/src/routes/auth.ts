@@ -325,17 +325,6 @@ router.post("/create-user", requireAuth, requireAdmin, async (req, res) => {
             },
         });
 
-        // Create default user settings
-        await prisma.userSettings.create({
-            data: {
-                userId: user.id,
-                playbackQuality: "original",
-                wifiOnly: false,
-                offlineEnabled: false,
-                maxCacheSizeMb: 10240,
-            },
-        });
-
         res.json({
             id: user.id,
             username: user.username,

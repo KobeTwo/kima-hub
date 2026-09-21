@@ -7,7 +7,7 @@ import Image from "next/image";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
 
-type IntegrationKey = "lidarr" | "audiobookshelf" | "soulseek";
+type IntegrationKey = "lidarr" | "soulseek";
 type IntegrationResult = { ok: boolean; message: string };
 
 export default function OnboardingPage() {
@@ -53,11 +53,6 @@ export default function OnboardingPage() {
 
     // Step 2: Integrations
     const [lidarr, setLidarr] = useState({
-        url: "",
-        apiKey: "",
-        enabled: false,
-    });
-    const [audiobookshelf, setAudiobookshelf] = useState({
         url: "",
         apiKey: "",
         enabled: false,
@@ -151,14 +146,6 @@ export default function OnboardingPage() {
                     url: lidarr.url,
                     apiKey: lidarr.apiKey,
                 });
-            } else if (type === "audiobookshelf") {
-                if (!audiobookshelf.url || !audiobookshelf.apiKey) {
-                    throw new Error("URL and API key are required");
-                }
-                await api.post("/system-settings/test-audiobookshelf", {
-                    url: audiobookshelf.url,
-                    apiKey: audiobookshelf.apiKey,
-                });
             } else if (type === "soulseek") {
                 if (!soulseek.username || !soulseek.password) {
                     throw new Error("Username and password are required");
@@ -196,7 +183,6 @@ export default function OnboardingPage() {
                 // Only send field values for enabled integrations; disabled ones get clean payloads
                 await Promise.all([
                     api.post("/onboarding/lidarr", lidarr.enabled ? lidarr : { url: "", apiKey: "", enabled: false }),
-                    api.post("/onboarding/audiobookshelf", audiobookshelf.enabled ? audiobookshelf : { url: "", apiKey: "", enabled: false }),
                     api.post("/onboarding/soulseek", soulseek.enabled ? soulseek : { username: "", password: "", enabled: false }),
                 ]);
                 await api.post("/onboarding/complete");
@@ -472,57 +458,6 @@ export default function OnboardingPage() {
                                                 }
                                                 testing={testingIntegration === "lidarr"}
                                                 result={integrationResults["lidarr"]}
-                                            />
-
-                                            {/* Audiobookshelf */}
-                                            <IntegrationCard
-                                                title="Audiobookshelf"
-                                                description="Browse and stream your audiobook collection alongside your music."
-                                                localPort="localhost:13378"
-                                                icon={
-                                                    <svg
-                                                        className="w-6 h-6"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                                        />
-                                                    </svg>
-                                                }
-                                                enabled={audiobookshelf.enabled}
-                                                onToggle={() =>
-                                                    setAudiobookshelf({
-                                                        ...audiobookshelf,
-                                                        enabled:
-                                                            !audiobookshelf.enabled,
-                                                    })
-                                                }
-                                                url={audiobookshelf.url}
-                                                apiKey={audiobookshelf.apiKey}
-                                                onUrlChange={(url) =>
-                                                    setAudiobookshelf({
-                                                        ...audiobookshelf,
-                                                        url,
-                                                    })
-                                                }
-                                                onApiKeyChange={(apiKey) =>
-                                                    setAudiobookshelf({
-                                                        ...audiobookshelf,
-                                                        apiKey,
-                                                    })
-                                                }
-                                                onTest={() =>
-                                                    testConnection(
-                                                        "audiobookshelf",
-                                                    )
-                                                }
-                                                testing={testingIntegration === "audiobookshelf"}
-                                                result={integrationResults["audiobookshelf"]}
                                             />
 
                                             {/* Soulseek */}

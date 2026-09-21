@@ -3,7 +3,7 @@
 import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
+import { Download, ListPlus } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
@@ -19,7 +19,6 @@ import type { MissingTrack, Track as AlbumTrack } from "@/features/album/types";
 
 // Components
 import { AlbumHero } from "@/features/album/components/AlbumHero";
-import { AlbumActionBar } from "@/features/album/components/AlbumActionBar";
 import { TrackList } from "@/features/album/components/TrackList";
 import { SimilarAlbums } from "@/features/album/components/SimilarAlbums";
 
@@ -33,10 +32,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     const { id } = use(params);
     const router = useRouter();
     const queryClient = useQueryClient();
-    // Use split hooks to avoid re-renders from currentTime updates
-    const { currentTrack } = useAudioState();
-    const { isPlaying } = useAudioPlayback();
-    const { pause } = useAudioControls();
 
     // State
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
@@ -44,8 +39,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
 
     // Custom hooks
     const { album, source, loading, reloadAlbum } = useAlbumData(id);
-    const { playAlbum, shufflePlay, addToQueue, downloadAlbum } =
-        useAlbumActions();
+    const { downloadAlbum } = useAlbumActions();
     const { isPendingByMbid } = useDownloadContext();
     const { previewTrack, previewPlaying, handlePreview } = useTrackPreview();
 
@@ -161,13 +155,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     }
 
     // Event handlers
-    const handlePlayTrack = (track: AlbumTrack, index: number) => {
-        const ownedTrackIndex = (album.tracks || []).findIndex(
-            (ownedTrack: AlbumTrack) => ownedTrack.id === track.id
-        );
-        playAlbum(album, ownedTrackIndex >= 0 ? ownedTrackIndex : index);
-    };
-
     const openPlaylistSelector = (trackIds: string[]) => {
         if (!trackIds.length) return;
         setPendingTrackIds(trackIds);
@@ -202,6 +189,10 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         }
     };
 
+    const isOwnedAlbum =
+        album.owned !== undefined ? album.owned : source === "library";
+    const showDownloadAlbum = !isOwnedAlbum && (album.mbid || album.rgMbid);
+
     return (
         <div className="min-h-screen flex flex-col">
             <AlbumHero
@@ -211,21 +202,28 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                 colors={colors}
                 onReload={reloadAlbum}
             >
-                <AlbumActionBar
-                    album={album}
-                    source={source || "discovery"}
-                    colors={colors}
-                    onPlayAll={() => playAlbum(album, 0)}
-                    onShuffle={() => shufflePlay(album)}
-                    onDownloadAlbum={() => downloadAlbum(album)}
-                    onAddToPlaylist={handleAddAlbumToPlaylist}
-                    isPendingDownload={isPendingByMbid(
-                        album?.mbid || album?.rgMbid || ""
+                <div className="flex items-center gap-4">
+                    {isOwnedAlbum && (
+                        <button
+                            onClick={handleAddAlbumToPlaylist}
+                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            title="Add to playlist"
+                        >
+                            <ListPlus className="w-5 h-5" />
+                        </button>
                     )}
-                    isPlaying={isPlaying}
-                    isPlayingThisAlbum={currentTrack?.album?.id === album.id}
-                    onPause={pause}
-                />
+
+                    {showDownloadAlbum && (
+                        <button
+                            onClick={() => downloadAlbum(album)}
+                            disabled={isPendingByMbid(album.mbid || album.rgMbid || "")}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all bg-brand hover:bg-[#e69200] text-black hover:scale-105 disabled:bg-white/5 disabled:text-white/50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        >
+                            <Download className="w-4 h-4" />
+                            <span>{isPendingByMbid(album.mbid || album.rgMbid || "") ? "Downloading..." : "Download"}</span>
+                        </button>
+                    )}
+                </div>
             </AlbumHero>
 
             {/* Main Content - fills remaining viewport height */}
@@ -256,12 +254,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                             tracks={combinedTracks}
                             album={album}
                             source={source || "discovery"}
-                            currentTrackId={currentTrack?.id}
-                            colors={colors}
-                            onPlayTrack={handlePlayTrack}
-                            onAddToQueue={(track: AlbumTrack) =>
-                                addToQueue(track, album)
-                            }
                             onAddToPlaylist={handleAddToPlaylist}
                             previewTrack={previewTrack}
                             previewPlaying={previewPlaying}

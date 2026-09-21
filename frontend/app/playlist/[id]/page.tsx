@@ -6,10 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { api } from "@/lib/api";
-import { useAudioState, useAudioPlayback, useAudioControls, Track as AudioTrack } from "@/lib/audio-context";
-import { useAudioController } from "@/lib/audio-controller-context";
 import { cn } from "@/utils/cn";
-import { shuffleArray } from "@/utils/shuffle";
 import { formatTime } from "@/utils/formatTime";
 import { queryKeys, usePlaylistQuery, useRemoveFromPlaylistMutation, useDeletePlaylistMutation, useUpdatePlaylistMutation } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,12 +14,9 @@ import { useToast } from "@/lib/toast-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import {
     Play,
-    Pause,
     Trash2,
-    Shuffle,
     Eye,
     EyeOff,
-    ListPlus,
     ListMusic,
     Music,
     Volume2,
@@ -41,7 +35,6 @@ import {
 } from "lucide-react";
 import { useTrackFormat } from "@/hooks/useTrackFormat";
 import { formatTrackDisplay } from "@/lib/track-format";
-import { useDoubleTapList } from "@/hooks/useDoubleTap";
 
 interface Track {
     id: string;
@@ -80,15 +73,11 @@ interface PendingTrack {
 }
 
 export default function PlaylistDetailPage() {
-    const controller = useAudioController();
     const params = useParams();
     const router = useRouter();
     const queryClient = useQueryClient();
     const { toast } = useToast();
-    const { currentTrack } = useAudioState();
     const { format: trackFormat } = useTrackFormat();
-    const { isPlaying } = useAudioPlayback();
-    const { playTracks, addToQueue, pause, resumeWithGesture } = useAudioControls();
     const playlistId = params.id as string;
 
     const { mutateAsync: removeTrack } = useRemoveFromPlaylistMutation();
@@ -163,8 +152,6 @@ export default function PlaylistDetailPage() {
             const audio = new Audio(
                 api.getPendingTrackPreviewStreamUrl(playlistId, pendingId)
             );
-            const { volume, isMuted } = controller?.getState() ?? { volume: 1, isMuted: false };
-            audio.volume = isMuted ? 0 : volume;
             audio.onended = () => setPlayingPreviewId(null);
             audio.onerror = (e) => {
                 console.error("Deezer preview playback failed:", e);
@@ -385,18 +372,6 @@ export default function PlaylistDetailPage() {
         }
     };
 
-    const playlistTrackIds = useMemo(() => {
-        return new Set(
-            playlist?.items?.map((item: PlaylistItem) => item.track.id) || []
-        );
-    }, [playlist?.items]);
-
-    const isThisPlaylistPlaying = useMemo(() => {
-        if (!isPlaying || !currentTrack || !playlist?.items?.length)
-            return false;
-        return playlistTrackIds.has(currentTrack.id);
-    }, [isPlaying, currentTrack, playlistTrackIds, playlist?.items?.length]);
-
     const totalDuration = useMemo(() => {
         if (!playlist?.items) return 0;
         return playlist.items.reduce(
@@ -413,75 +388,6 @@ export default function PlaylistDetailPage() {
             return `${hours} hr ${mins} min`;
         }
         return `${mins} min`;
-    };
-
-    const handlePlayPlaylist = () => {
-        if (!playlist?.items || playlist.items.length === 0) return;
-
-        if (isThisPlaylistPlaying) {
-            if (isPlaying) {
-                pause();
-            } else {
-                resumeWithGesture();
-            }
-            return;
-        }
-
-        const tracks = playlist.items.map((item: PlaylistItem) => ({
-            id: item.track.id,
-            title: item.track.title,
-            artist: {
-                name: item.track.album.artist.name,
-                id: item.track.album.artist.id,
-            },
-            album: {
-                title: item.track.album.title,
-                coverArt: item.track.album.coverArt,
-                id: item.track.album.id,
-            },
-            duration: item.track.duration,
-        }));
-        playTracks(tracks, 0);
-    };
-
-    const handlePlayTrack = (index: number) => {
-        if (!playlist?.items || playlist.items.length === 0) return;
-
-        const tracks = playlist.items.map((item: PlaylistItem) => ({
-            id: item.track.id,
-            title: item.track.title,
-            artist: {
-                name: item.track.album.artist.name,
-                id: item.track.album.artist.id,
-            },
-            album: {
-                title: item.track.album.title,
-                coverArt: item.track.album.coverArt,
-                id: item.track.album.id,
-            },
-            duration: item.track.duration,
-        }));
-        playTracks(tracks, index);
-    };
-
-    const handleRowTouchEnd = useDoubleTapList(handlePlayTrack);
-
-    const handleAddToQueue = (track: Track) => {
-        const formattedTrack = {
-            id: track.id,
-            title: track.title,
-            artist: {
-                name: track.album.artist.name,
-                id: track.album.artist.id,
-            },
-            album: {
-                title: track.album.title,
-                coverArt: track.album.coverArt,
-                id: track.album.id,
-            },
-            duration: track.duration,
-        };
-        addToQueue(formattedTrack);
     };
 
     const rows: (PlaylistItem | PendingTrack)[] = useMemo(
@@ -618,7 +524,6 @@ export default function PlaylistDetailPage() {
             }
 
             const playlistItem = item as PlaylistItem;
-            const isCurrentlyPlaying = currentTrack?.id === playlistItem.track.id;
             const trackIndex = playlist?.items?.findIndex(
                 (i: PlaylistItem) => i.id === playlistItem.id
             ) ?? index;
@@ -627,39 +532,15 @@ export default function PlaylistDetailPage() {
                 <div
                     key={playlistItem.id}
                     data-track-index={trackIndex}
-                    onDoubleClick={() => handlePlayTrack(trackIndex)}
-                    onTouchEnd={handleRowTouchEnd}
                     className={cn(
-                        "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-lg hover:bg-white/[0.03] transition-all group cursor-pointer border border-transparent hover:border-white/5 touch-manipulation",
-                        isCurrentlyPlaying && "bg-white/5 border-brand/30"
+                        "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-lg hover:bg-white/[0.03] transition-all group border border-transparent hover:border-white/5 touch-manipulation"
                     )}
                 >
-                    {/* Track Number / Play Button */}
+                    {/* Track Number */}
                     <div className="flex items-center justify-center">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handlePlayTrack(trackIndex);
-                            }}
-                            className="w-8 h-8 flex items-center justify-center"
-                            aria-label={isCurrentlyPlaying && isPlaying ? "Pause" : "Play"}
-                        >
-                            <span
-                                className={cn(
-                                    "text-xs font-mono group-hover:hidden",
-                                    isCurrentlyPlaying
-                                        ? "text-brand font-black"
-                                        : "text-white/30"
-                                )}
-                            >
-                                {isCurrentlyPlaying && isPlaying ? (
-                                    <Music className="w-4 h-4 text-brand animate-pulse" />
-                                ) : (
-                                    trackIndex + 1
-                                )}
-                            </span>
-                            <Play className="w-4 h-4 text-white hidden group-hover:block" />
-                        </button>
+                        <span className="text-xs font-mono text-white/30">
+                            {trackIndex + 1}
+                        </span>
                     </div>
 
                     {/* Title + Artist */}
@@ -687,9 +568,7 @@ export default function PlaylistDetailPage() {
                             <p
                                 className={cn(
                                     "text-sm font-black truncate tracking-tight",
-                                    isCurrentlyPlaying
-                                        ? "text-brand"
-                                        : "text-white"
+                                    "text-white"
                                 )}
                             >
                                 {formatTrackDisplay(
@@ -714,16 +593,6 @@ export default function PlaylistDetailPage() {
 
                     {/* Duration + Actions */}
                     <div className="flex items-center justify-end gap-2">
-                        <button
-                            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-white/10 text-white/30 hover:text-white transition-all"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddToQueue(playlistItem.track);
-                            }}
-                            title="Add to Queue"
-                        >
-                            <ListPlus className="w-4 h-4" />
-                        </button>
                         <span className="text-[10px] font-mono text-white/30 w-12 text-right uppercase tracking-wider">
                             {formatTime(playlistItem.track.duration)}
                         </span>
@@ -930,52 +799,6 @@ export default function PlaylistDetailPage() {
             {/* Action Bar */}
             <div className="px-4 md:px-8 py-4">
                 <div className="max-w-[1800px] mx-auto flex items-center gap-4">
-                    {/* Play Button */}
-                    {playlist.items && playlist.items.length > 0 && (
-                        <button
-                            onClick={handlePlayPlaylist}
-                            aria-label={isThisPlaylistPlaying && isPlaying ? "Pause" : "Play all"}
-                            className="h-12 w-12 rounded-lg bg-brand hover:bg-[#f97316] hover:scale-105 flex items-center justify-center shadow-lg shadow-[#fca208]/20 transition-all"
-                        >
-                            {isThisPlaylistPlaying && isPlaying ? (
-                                <Pause className="w-5 h-5 fill-current text-black" />
-                            ) : (
-                                <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                            )}
-                        </button>
-                    )}
-
-                    {/* Shuffle */}
-                    {playlist.items && playlist.items.length > 1 && (
-                        <button
-                            onClick={() => {
-                                if (!playlist?.items || playlist.items.length === 0) return;
-                                const tracks: AudioTrack[] = playlist.items.map(
-                                    (item: PlaylistItem) => ({
-                                        id: item.track.id,
-                                        title: item.track.title,
-                                        artist: {
-                                            name: item.track.album.artist.name,
-                                            id: item.track.album.artist.id,
-                                        },
-                                        album: {
-                                            title: item.track.album.title,
-                                            coverArt: item.track.album.coverArt,
-                                            id: item.track.album.id,
-                                        },
-                                        duration: item.track.duration,
-                                    })
-                                );
-                                const shuffled = shuffleArray(tracks);
-                                playTracks(shuffled, 0);
-                            }}
-                            className="h-8 w-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
-                            title="Shuffle play"
-                        >
-                            <Shuffle className="w-5 h-5" />
-                        </button>
-                    )}
-
                     <div className="flex-1" />
 
                     {/* Share Button */}

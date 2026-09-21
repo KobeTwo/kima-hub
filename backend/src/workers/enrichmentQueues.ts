@@ -18,7 +18,6 @@ export const QUEUE_NAMES = {
     ARTISTS: "enrichment-artists",
     TRACKS: "enrichment-tracks",
     VIBE: "enrichment-vibe",
-    PODCASTS: "enrichment-podcasts",
 } as const;
 
 const DEFAULT_JOB_OPTIONS = {
@@ -44,11 +43,6 @@ export const vibeQueue = new Queue(QUEUE_NAMES.VIBE, {
     defaultJobOptions: { ...DEFAULT_JOB_OPTIONS, attempts: 2 },
 });
 
-export const podcastQueue = new Queue(QUEUE_NAMES.PODCASTS, {
-    connection: getConnectionOptions(),
-    defaultJobOptions: DEFAULT_JOB_OPTIONS,
-});
-
 // Factory for Worker connection options — each BullMQ Worker must have its own connection
 export function createWorkerConnection(): ConnectionOptions {
     return getConnectionOptions();
@@ -59,6 +53,5 @@ export async function closeEnrichmentQueues(): Promise<void> {
         artistQueue.close(),
         trackQueue.close(),
         vibeQueue.close(),
-        podcastQueue.close(),
     ]);
 }

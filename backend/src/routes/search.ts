@@ -4,9 +4,7 @@ import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { lastFmService } from "../services/lastfm";
 import { searchService, normalizeCacheQuery, type SearchResults } from "../services/search";
-import axios from "axios";
 import { redisClient } from "../utils/redis";
-import { deezerService, mergeAndDedupePodcasts } from "../services/deezer";
 
 const router = Router();
 
@@ -45,9 +43,6 @@ function transformSearchResults(serviceResults: SearchResults) {
                 },
             },
         })),
-        audiobooks: serviceResults.audiobooks,
-        podcasts: serviceResults.podcasts,
-        episodes: serviceResults.episodes,
     };
 }
 
@@ -66,9 +61,6 @@ router.get("/", async (req, res) => {
                 artists: [],
                 albums: [],
                 tracks: [],
-                audiobooks: [],
-                podcasts: [],
-                episodes: [],
             });
         }
 
@@ -124,7 +116,7 @@ router.get("/genres", async (_req, res) => {
 });
 
 /**
- * GET /search/discover?q=query&type=music|podcasts
+ * GET /search/discover?q=query&type=music
  * Search for NEW content to discover (not in your library).
  * Cache TTL: 15 min -- external data changes infrequently.
  */
@@ -183,53 +175,6 @@ router.get("/discover", async (req, res) => {
             promiseMap.tracks = lastFmService.searchTracks(searchQuery, searchLimit);
         }
 
-        if (type === "podcasts" || type === "all") {
-            promiseMap.podcasts = (async () => {
-                const [itunesResult, deezerResult] = await Promise.allSettled([
-                    axios.get("https://itunes.apple.com/search", {
-                        params: { term: query, media: "podcast", entity: "podcast", limit: searchLimit },
-                        timeout: 5000,
-                    }).then((resp) => resp.data.results || []),
-                    deezerService.searchPodcasts(query, searchLimit),
-                ]);
-
-                const itunesPodcasts = itunesResult.status === "fulfilled" ? itunesResult.value : [];
-                const deezerPodcasts = deezerResult.status === "fulfilled" ? deezerResult.value : [];
-
-                if (itunesResult.status === "rejected") {
-                    logger.warn("[SEARCH DISCOVER] iTunes podcast search failed:", itunesResult.reason?.message || itunesResult.reason);
-                }
-
-                const itunesMapped = itunesPodcasts.map((podcast: any) => ({
-                    type: "podcast",
-                    id: podcast.collectionId,
-                    name: podcast.collectionName,
-                    artist: podcast.artistName,
-                    description: podcast.description,
-                    coverUrl: podcast.artworkUrl600 || podcast.artworkUrl100,
-                    feedUrl: podcast.feedUrl,
-                    genres: podcast.genres || [],
-                    trackCount: podcast.trackCount,
-                }));
-
-                const deezerMapped = deezerPodcasts.map((dp) => ({
-                    type: "podcast",
-                    id: `deezer:${dp.id}`,
-                    name: dp.title,
-                    artist: "",
-                    description: dp.description,
-                    coverUrl: dp.pictureUrl,
-                    feedUrl: null,
-                    genres: [] as string[],
-                    trackCount: 0,
-                }));
-
-                const results = mergeAndDedupePodcasts(itunesMapped, deezerMapped);
-
-                return results.slice(0, searchLimit);
-            })();
-        }
-
         // Await all with allSettled so one failure doesn't block others
         const keys = Object.keys(promiseMap);
         const settled = await Promise.allSettled(keys.map((k) => promiseMap[k]));
@@ -251,9 +196,6 @@ router.get("/discover", async (req, res) => {
         if (resolved.tracks) {
             logger.debug(`[SEARCH DISCOVER] Found ${resolved.tracks.length} track results`);
             results.push(...resolved.tracks);
-        }
-        if (resolved.podcasts) {
-            results.push(...resolved.podcasts);
         }
 
         const payload = { results, aliasInfo };

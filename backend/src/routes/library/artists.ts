@@ -517,22 +517,6 @@ router.get("/artists/:id", async (req, res) => {
     const allTracks = artist.albums.flatMap((a) => a.tracks);
     let topTracks = allTracks.slice(0, 10);
 
-    const userId = req.user!.id;
-    const trackIds = allTracks.map((t) => t.id);
-    const userPlays = await prisma.play.groupBy({
-      by: ["trackId"],
-      where: {
-        userId,
-        trackId: { in: trackIds },
-      },
-      _count: {
-        id: true,
-      },
-    });
-    const userPlayCounts = new Map(
-      userPlays.map((p) => [p.trackId, p._count.id]),
-    );
-
     const topTracksCacheKey = `top-tracks:${artist.id}`;
     try {
       const cachedTopTracks = await redisClient.get(topTracksCacheKey);
@@ -610,11 +594,13 @@ router.get("/artists/:id", async (req, res) => {
         const matchedTrack = tracksByExactTitle.get(exactKey) || tracksByNormTitle.get(normKey) || tracksByStrippedTitle.get(strippedKey);
 
         if (matchedTrack) {
+          // userPlayCount is no longer tracked (playback tracking was removed),
+          // so it is always 0 while Last.fm's public playCount still applies.
           combinedTracks.push({
             ...matchedTrack,
             playCount: lfmTrack.playcount ? parseInt(lfmTrack.playcount) : 0,
             listeners: lfmTrack.listeners ? parseInt(lfmTrack.listeners) : 0,
-            userPlayCount: userPlayCounts.get(matchedTrack.id) || 0,
+            userPlayCount: 0,
             album: {
               ...matchedTrack.album,
               coverArt: matchedTrack.album.coverUrl,
@@ -647,7 +633,7 @@ router.get("/artists/:id", async (req, res) => {
       );
       topTracks = topTracks.map((t) => ({
         ...t,
-        userPlayCount: userPlayCounts.get(t.id) || 0,
+        userPlayCount: 0,
         album: {
           ...t.album,
           coverArt: t.album.coverUrl,

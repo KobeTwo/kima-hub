@@ -4,15 +4,11 @@ import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { api } from "@/lib/api";
-import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { Play, Pause, Music, Shuffle, Save, ListPlus } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { Music, Save } from "lucide-react";
 import { formatTime } from "@/utils/formatTime";
-import { shuffleArray } from "@/utils/shuffle";
 import { useToast } from "@/lib/toast-context";
 import { useMixQuery } from "@/hooks/useQueries";
-import { useDoubleTapList } from "@/hooks/useDoubleTap";
 
 interface MixTrack {
     id: string;
@@ -34,10 +30,6 @@ export default function MixPage() {
     const params = useParams();
     const router = useRouter();
     const mixId = params.id as string;
-    // Use split hooks to avoid re-renders from currentTime updates
-    const { currentTrack } = useAudioState();
-    const { isPlaying } = useAudioPlayback();
-    const { playTracks, addToQueue, pause, resumeWithGesture } = useAudioControls();
 
     const { data: mix, isLoading } = useMixQuery(mixId);
     const [isSaving, setIsSaving] = useState(false);
@@ -57,84 +49,6 @@ export default function MixPage() {
         return `${mins} min`;
     };
 
-
-    // Check if this mix is currently playing
-    const mixTrackIds = useMemo(() => {
-        return new Set(mix?.tracks?.map((track: MixTrack) => track.id) || []);
-    }, [mix?.tracks]);
-
-    const isThisMixPlaying = useMemo(() => {
-        if (!isPlaying || !currentTrack || !mix?.tracks?.length) return false;
-        return mixTrackIds.has(currentTrack.id);
-    }, [isPlaying, currentTrack, mixTrackIds, mix?.tracks?.length]);
-
-    const formatTracksForPlayback = (tracks: MixTrack[]) => {
-        return tracks.map((track) => ({
-            id: track.id,
-            title: track.title,
-            artist: {
-                name: track.album.artist.name,
-                id: track.album.artist.id,
-            },
-            album: {
-                title: track.album.title,
-                coverArt: track.album.coverUrl,
-                id: track.albumId,
-            },
-            duration: track.duration,
-        }));
-    };
-
-    const handlePlayMix = () => {
-        if (!mix?.tracks || mix.tracks.length === 0) return;
-
-        // If this mix is playing, toggle pause/resume
-        if (isThisMixPlaying) {
-            if (isPlaying) {
-                pause();
-            } else {
-                resumeWithGesture();
-            }
-            return;
-        }
-
-        const tracks = formatTracksForPlayback(mix.tracks);
-        playTracks(tracks, 0);
-    };
-
-    const handlePlayTrack = (index: number) => {
-        if (!mix?.tracks || mix.tracks.length === 0) return;
-        const tracks = formatTracksForPlayback(mix.tracks);
-        playTracks(tracks, index);
-    };
-
-    const handleRowTouchEnd = useDoubleTapList(handlePlayTrack);
-
-    const handleShuffle = () => {
-        if (!mix?.tracks) return;
-        const tracks = formatTracksForPlayback(mix.tracks);
-        const shuffled = shuffleArray(tracks);
-        playTracks(shuffled, 0);
-    };
-
-    const handleAddToQueue = (track: MixTrack) => {
-        const formattedTrack = {
-            id: track.id,
-            title: track.title,
-            artist: {
-                name: track.album.artist.name,
-                id: track.album.artist.id,
-            },
-            album: {
-                title: track.album.title,
-                coverArt: track.album.coverUrl,
-                id: track.albumId,
-            },
-            duration: track.duration,
-        };
-        addToQueue(formattedTrack);
-        toast.success(`Added ${track.title} to queue`);
-    };
 
     const handleSaveAsPlaylist = async () => {
         if (!mix) return;
@@ -257,32 +171,6 @@ export default function MixPage() {
             {/* Action Bar */}
             <div className="bg-gradient-to-b from-[#1a1a1a]/60 to-transparent px-4 md:px-8 py-4">
                 <div className="flex items-center gap-4">
-                    {/* Play Button */}
-                    {mix.tracks && mix.tracks.length > 0 && (
-                        <button
-                            onClick={handlePlayMix}
-                            aria-label={isThisMixPlaying && isPlaying ? `Pause ${mix.name}` : `Play ${mix.name}`}
-                            className="h-12 w-12 rounded-full bg-brand hover:bg-[#d4a000] hover:scale-105 flex items-center justify-center shadow-lg transition-all"
-                        >
-                            {isThisMixPlaying && isPlaying ? (
-                                <Pause className="w-5 h-5 fill-current text-black" />
-                            ) : (
-                                <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                            )}
-                        </button>
-                    )}
-
-                    {/* Shuffle Button */}
-                    {mix.tracks && mix.tracks.length > 1 && (
-                        <button
-                            onClick={handleShuffle}
-                            aria-label={`Shuffle play ${mix.name}`}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        >
-                            <Shuffle className="w-5 h-5" />
-                        </button>
-                    )}
-
                     {/* Save as Playlist Button */}
                     <button
                         onClick={handleSaveAsPlaylist}
@@ -312,42 +200,17 @@ export default function MixPage() {
                         {/* Track Rows */}
                         <div>
                             {mix.tracks.map((track: MixTrack, index: number) => {
-                                const isCurrentlyPlaying = currentTrack?.id === track.id;
                                 return (
                                     <div
                                         key={track.id}
                                         data-track-index={index}
-                                        onDoubleClick={() => handlePlayTrack(index)}
-                                        onTouchEnd={handleRowTouchEnd}
-                                        className={cn(
-                                            "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
-                                            isCurrentlyPlaying && "bg-white/10"
-                                        )}
+                                        className="grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group touch-manipulation"
                                     >
-                                        {/* Track Number / Play Button */}
+                                        {/* Track Number */}
                                         <div className="flex items-center justify-center">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handlePlayTrack(index);
-                                                }}
-                                                className="min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                                aria-label={isCurrentlyPlaying && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-                                            >
-                                                <span
-                                                    className={cn(
-                                                        "text-sm group-hover:hidden",
-                                                        isCurrentlyPlaying ? "text-brand" : "text-gray-400"
-                                                    )}
-                                                >
-                                                    {isCurrentlyPlaying && isPlaying ? (
-                                                        <Music className="w-4 h-4 text-brand animate-pulse" />
-                                                    ) : (
-                                                        index + 1
-                                                    )}
-                                                </span>
-                                                <Play className="w-4 h-4 text-white hidden group-hover:block" />
-                                            </button>
+                                            <span className="text-sm text-gray-400">
+                                                {index + 1}
+                                            </span>
                                         </div>
 
                                         {/* Title + Artist */}
@@ -369,12 +232,7 @@ export default function MixPage() {
                                                 )}
                                             </div>
                                             <div className="min-w-0">
-                                                <p
-                                                    className={cn(
-                                                        "text-sm font-medium truncate",
-                                                        isCurrentlyPlaying ? "text-brand" : "text-white"
-                                                    )}
-                                                >
+                                                <p className="text-sm font-medium truncate text-white">
                                                     {track.title}
                                                 </p>
                                                 <p className="text-xs text-gray-400 truncate">
@@ -388,18 +246,8 @@ export default function MixPage() {
                                             {track.album.title}
                                         </p>
 
-                                        {/* Duration + Actions */}
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button
-                                                className="min-h-[44px] min-w-[44px] rounded-full opacity-0 group-hover:opacity-100 hover:bg-white/10 text-gray-400 hover:text-white transition-all flex items-center justify-center"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleAddToQueue(track);
-                                                }}
-                                                aria-label={`Add ${track.title} to queue`}
-                                            >
-                                                <ListPlus className="w-4 h-4" />
-                                            </button>
+                                        {/* Duration */}
+                                        <div className="flex items-center justify-end">
                                             <span className="text-sm text-gray-400 w-12 text-right">
                                                 {formatTime(track.duration)}
                                             </span>

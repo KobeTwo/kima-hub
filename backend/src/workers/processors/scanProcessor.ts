@@ -186,10 +186,10 @@ export async function processScan(
     // Report progress
     await job.updateProgress(0);
 
-    // Prepare cover cache path (store alongside transcode cache)
+    // Prepare cover cache path (store in the cache covers directory)
     const coverCachePath = path.join(
-        config.music.transcodeCachePath,
-        "../covers"
+        config.music.cacheDir,
+        "covers"
     );
 
     // Create scanner with progress callback and cover cache path

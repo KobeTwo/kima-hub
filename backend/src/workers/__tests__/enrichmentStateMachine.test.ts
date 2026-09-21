@@ -42,23 +42,6 @@ jest.mock("../../services/enrichmentFailureService", () => ({
     },
 }));
 
-jest.mock("../../services/audioAnalysisCleanup", () => ({
-    audioAnalysisCleanupService: {
-        cleanupStaleProcessing: jest.fn().mockResolvedValue({ reset: 0, permanentlyFailed: 0, recovered: 0 }),
-        resetCircuitBreaker: jest.fn(),
-        isCircuitOpen: jest.fn().mockReturnValue(false),
-    },
-}));
-
-jest.mock("../../services/featureDetection", () => ({
-    featureDetection: {
-        getFeatures: jest.fn().mockResolvedValue({
-            vibeEmbeddings: false,
-            podcastSupport: false,
-        }),
-    },
-}));
-
 jest.mock("../../services/lastfm", () => ({
     lastFmService: {
         getTrackTags: jest.fn().mockResolvedValue([]),
@@ -102,7 +85,6 @@ jest.mock("../enrichmentQueues", () => ({
     artistQueue: { add: mockQueueAdd, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
     trackQueue: { add: mockQueueAdd, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
     vibeQueue: { add: mockQueueAdd, clean: mockQueueClean, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
-    podcastQueue: { add: mockQueueAdd, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
     closeEnrichmentQueues: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -112,16 +94,6 @@ jest.mock("../artistEnrichmentWorker", () => ({
 jest.mock("../trackEnrichmentWorker", () => ({
     startTrackEnrichmentWorker: jest.fn().mockResolvedValue({ pause: jest.fn(), resume: jest.fn(), close: jest.fn() }),
 }));
-jest.mock("../podcastEnrichmentWorker", () => ({
-    startPodcastEnrichmentWorker: jest.fn().mockResolvedValue({ pause: jest.fn(), resume: jest.fn(), close: jest.fn() }),
-}));
-jest.mock("../audioCompletionSubscriber", () => ({
-    startAudioCompletionSubscriber: jest.fn(),
-    stopAudioCompletionSubscriber: jest.fn().mockResolvedValue(undefined),
-    haltVibeQueuing: jest.fn(),
-    resumeVibeQueuing: jest.fn(),
-}));
-
 // Mock Prisma with defaults that make the cycle do minimal work
 const mockPrismaArtistFindMany = jest.fn().mockResolvedValue([]);
 const mockPrismaArtistUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
@@ -143,10 +115,6 @@ jest.mock("../../utils/db", () => ({
             updateMany: mockPrismaTrackUpdateMany,
             count: mockPrismaTrackCount,
             groupBy: jest.fn().mockResolvedValue([]),
-        },
-        podcast: {
-            findMany: jest.fn().mockResolvedValue([]),
-            count: jest.fn().mockResolvedValue(0),
         },
         enrichmentFailure: {
             findMany: jest.fn().mockResolvedValue([]),
@@ -218,28 +186,6 @@ describe("Enrichment State Machine", () => {
     });
 
     describe("startup and crash recovery", () => {
-        it("should reset orphaned audio tracks on startup", async () => {
-            await startUnifiedEnrichmentWorker();
-
-            expect(mockPrismaTrackUpdateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { analysisStatus: { in: ["processing", "queued"] } },
-                    data: expect.objectContaining({ analysisStatus: "pending", analysisStartedAt: null }),
-                }),
-            );
-        });
-
-        it("should reset orphaned vibe tracks on startup", async () => {
-            await startUnifiedEnrichmentWorker();
-
-            expect(mockPrismaTrackUpdateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { vibeAnalysisStatus: "processing" },
-                    data: { vibeAnalysisStatus: "pending", vibeAnalysisStartedAt: null },
-                }),
-            );
-        });
-
         it("should reset artists stuck in enriching on startup", async () => {
             await startUnifiedEnrichmentWorker();
 
@@ -337,7 +283,7 @@ describe("Enrichment State Machine", () => {
             // triggerEnrichmentNow calls clearPauseState first, which resets isPaused.
             // So the state sync re-reads and finds "paused", sets isPaused=true.
             // Result should be empty (paused).
-            expect(result).toEqual({ artists: 0, tracks: 0, audioQueued: 0 });
+            expect(result).toEqual({ artists: 0, tracks: 0 });
         });
 
         it("should reverse-sync when local isPaused is stale", async () => {

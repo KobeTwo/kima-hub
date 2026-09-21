@@ -18,12 +18,10 @@ import {
     artistQueue,
     trackQueue,
     vibeQueue,
-    podcastQueue,
     closeEnrichmentQueues,
 } from "./enrichmentQueues";
 import { startArtistEnrichmentWorker } from "./artistEnrichmentWorker";
 import { startTrackEnrichmentWorker } from "./trackEnrichmentWorker";
-import { startPodcastEnrichmentWorker } from "./podcastEnrichmentWorker";
 import { enrichmentStateService } from "../services/enrichmentState";
 import { enrichmentFailureService } from "../services/enrichmentFailureService";
 import { musicBrainzService } from "../services/musicbrainz";
@@ -277,11 +275,10 @@ export async function startUnifiedEnrichmentWorker() {
      // Initialize state
      await enrichmentStateService.initializeState();
 
-    // Start BullMQ Workers (artist, track, podcast)
+    // Start BullMQ Workers (artist, track)
     activeEnrichmentWorkers = await Promise.all([
         startArtistEnrichmentWorker(),
         startTrackEnrichmentWorker(),
-        startPodcastEnrichmentWorker(),
     ]);
 
     // Setup control channel subscription
@@ -527,8 +524,6 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
             return { artists: artistsProcessed, tracks: tracksProcessed };
         }
 
-        await runPhase("podcasts", executePodcastRefreshPhase);
-
         // Orphaned failure cleanup -- runs at most once per hour, never during stop/pause
         const ONE_HOUR_MS = 60 * 60 * 1000;
         if (!isStopping && !isPaused && (!lastOrphanedFailuresCleanup || Date.now() - lastOrphanedFailuresCleanup.getTime() > ONE_HOUR_MS)) {
@@ -645,7 +640,6 @@ async function runEnrichmentCycle(fullMode: boolean): Promise<{
                             const parts: string[] = [];
                             if (failureCounts.artist > 0) parts.push(`${failureCounts.artist} artist(s)`);
                             if (failureCounts.track > 0) parts.push(`${failureCounts.track} track(s)`);
-                            if (failureCounts.podcast > 0) parts.push(`${failureCounts.podcast} podcast(s)`);
 
                             await notificationService.create({
                                 userId: user.id,
@@ -801,7 +795,7 @@ async function shouldHaltCycle(): Promise<boolean> {
  * Run a phase and return result. Returns null if cycle should halt.
  */
 async function runPhase(
-    phaseName: "artists" | "tracks" | "scan" | "podcasts",
+    phaseName: "artists" | "tracks" | "scan",
     executor: () => Promise<number>,
 ): Promise<number | null> {
     await enrichmentStateService.updateState({
@@ -1044,66 +1038,6 @@ async function executeScanPhase(): Promise<number> {
     return validated;
 }
 
-
-
-export async function executePodcastRefreshPhase(): Promise<number> {
-    const podcastCount = await prisma.podcast.count();
-    if (podcastCount === 0) return 0;
-
-    const ONE_HOUR = 60 * 60 * 1000;
-    const staleThreshold = new Date(Date.now() - ONE_HOUR);
-    const stalePodcasts = await prisma.podcast.findMany({
-        where: { lastRefreshed: { lt: staleThreshold } },
-        select: { id: true, title: true },
-    });
-
-    if (stalePodcasts.length === 0) return 0;
-
-    // BullMQ keeps the jobId dedup marker in Redis after a job settles -- for
-    // BOTH completed and failed jobs. The original #81 fix cleaned only
-    // "completed", which left failed jobs as permanent poison: one failed
-    // refresh kept its `podcast-<id>` marker forever, so every later add() with
-    // that jobId silently no-op'd and the podcast never refreshed again (a
-    // single corrupt failed job took out all auto-refresh). Clean both states
-    // so a failed refresh is retried rather than wedging the feed.
-    try {
-        await podcastQueue.clean(0, 0, "completed");
-        await podcastQueue.clean(0, 0, "failed");
-    } catch (err) {
-        logger.warn(`[Enrichment] podcastQueue clean failed: ${(err as Error).message}`);
-    }
-
-    // Claim these podcasts by advancing lastRefreshed before queuing.
-    // refreshPodcastFeed only advances lastRefreshed on success or a 304, so
-    // without this an unreachable feed would keep matching the stale-window
-    // query and be re-queued every cycle (seconds apart). Bumping up front
-    // gives every outcome -- success, 304, or failure -- a full backoff window;
-    // a successful refresh advances it again moments later.
-    await prisma.podcast.updateMany({
-        where: { id: { in: stalePodcasts.map((p) => p.id) } },
-        data: { lastRefreshed: new Date() },
-    });
-
-    let queued = 0;
-    for (const podcast of stalePodcasts) {
-        try {
-            await podcastQueue.add(
-                "refresh",
-                { podcastId: podcast.id, podcastTitle: podcast.title },
-                { jobId: `podcast-${podcast.id}` }, // dedup -- safe now that completed jobs are cleaned above
-            );
-            queued++;
-        } catch (err) {
-            logger.warn(`[Enrichment] Failed to queue podcast ${podcast.id}: ${(err as Error).message}`);
-        }
-    }
-
-    if (queued > 0) {
-        logger.debug(`[Enrichment] Queued ${queued} podcast refreshes`);
-    }
-    return queued;
-}
-
  /**
   * Get comprehensive enrichment progress
  *
@@ -1300,7 +1234,7 @@ export async function resetAllEnrichmentData(): Promise<{
         await redisInstance.del(...keysToDelete);
     }
 
-    for (const queue of [artistQueue, trackQueue, vibeQueue, podcastQueue]) {
+    for (const queue of [artistQueue, trackQueue, vibeQueue]) {
         try {
             await queue.clean(0, 0, "completed");
             await queue.clean(0, 0, "failed");

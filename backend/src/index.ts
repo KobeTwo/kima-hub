@@ -11,37 +11,26 @@ import { logger } from "./utils/logger";
 import authRoutes from "./routes/auth";
 import onboardingRoutes from "./routes/onboarding";
 import libraryRoutes from "./routes/library";
-import playsRoutes from "./routes/plays";
 import settingsRoutes from "./routes/settings";
 import systemSettingsRoutes from "./routes/systemSettings";
-import listeningStateRoutes from "./routes/listeningState";
-import playbackStateRoutes from "./routes/playbackState";
-import offlineRoutes from "./routes/offline";
 import playlistsRoutes from "./routes/playlists";
 import searchRoutes from "./routes/search";
 import recommendationsRoutes from "./routes/recommendations";
 import downloadsRoutes from "./routes/downloads";
 import webhooksRoutes from "./routes/webhooks";
-import audiobooksRoutes from "./routes/audiobooks";
-import podcastsRoutes from "./routes/podcasts";
 import artistsRoutes from "./routes/artists";
 import soulseekRoutes from "./routes/soulseek";
 import discoverRoutes from "./routes/discover";
 import apiKeysRoutes from "./routes/apiKeys";
 import mixesRoutes from "./routes/mixes";
 import enrichmentRoutes from "./routes/enrichment";
-import homepageRoutes from "./routes/homepage";
-import deviceLinkRoutes from "./routes/deviceLink";
 import spotifyRoutes from "./routes/spotify";
 import notificationsRoutes from "./routes/notifications";
 import browseRoutes from "./routes/browse";
 import releasesRoutes from "./routes/releases";
-import systemRoutes from "./routes/system";
 import shareRoutes from "./routes/share";
 import eventsRoutes from "./routes/events";
 import eventsTicketRoutes from "./routes/eventsTicket";
-import debugRouter from "./routes/debug";
-import { subsonicRouter } from "./routes/subsonic/index";
 import { dataCacheService } from "./services/dataCache";
 import { enrichmentStateService } from "./services/enrichmentState";
 import { errorHandler } from "./middleware/errorHandler";
@@ -94,14 +83,7 @@ app.use(
         credentials: true,
     })
 );
-const defaultJsonParser = express.json({ limit: "1mb" });
-const largeJsonParser = express.json({ limit: "5mb" });
-app.use((req, res, next) => {
-    if (req.path.startsWith("/api/playback-state")) {
-        return largeJsonParser(req, res, next);
-    }
-    return defaultJsonParser(req, res, next);
-});
+app.use(express.json({ limit: "1mb" }));
 
 // Session
 // Trust proxy for reverse proxy setups (nginx, traefik, etc.)
@@ -142,42 +124,28 @@ app.use("/api/share", shareRoutes);
 
 // Apply general API rate limiting to all API routes
 app.use("/api/api-keys", apiLimiter, apiKeysRoutes);
-app.use("/api/device-link", apiLimiter, deviceLinkRoutes);
 // NOTE: /api/library has its own rate limiting (imageLimiter for cover-art, apiLimiter for others)
 app.use("/api/library", libraryRoutes);
-app.use("/api/plays", apiLimiter, playsRoutes);
 app.use("/api/settings", apiLimiter, settingsRoutes);
 app.use("/api/system-settings", apiLimiter, systemSettingsRoutes);
-app.use("/api/listening-state", apiLimiter, listeningStateRoutes);
-app.use("/api/playback-state", playbackStateRoutes); // No rate limit - syncs frequently
-app.use("/api/offline", apiLimiter, offlineRoutes);
 app.use("/api/playlists", apiLimiter, playlistsRoutes);
 app.use("/api/search", apiLimiter, searchRoutes);
 app.use("/api/recommendations", apiLimiter, recommendationsRoutes);
 app.use("/api/downloads", apiLimiter, downloadsRoutes);
 app.use("/api/notifications", apiLimiter, notificationsRoutes);
 app.use("/api/webhooks", webhooksRoutes); // Webhooks should not be rate limited
-// NOTE: /api/audiobooks has its own rate limiting (imageLimiter for covers, apiLimiter for others)
-app.use("/api/audiobooks", audiobooksRoutes);
-app.use("/api/podcasts", apiLimiter, podcastsRoutes);
 app.use("/api/artists", apiLimiter, artistsRoutes);
 app.use("/api/soulseek", apiLimiter, soulseekRoutes);
 app.use("/api/discover", apiLimiter, discoverRoutes);
 app.use("/api/mixes", apiLimiter, mixesRoutes);
 app.use("/api/enrichment", apiLimiter, enrichmentRoutes);
-app.use("/api/homepage", apiLimiter, homepageRoutes);
 app.use("/api/spotify", apiLimiter, spotifyRoutes);
 app.use("/api/browse", apiLimiter, browseRoutes);
 app.use("/api/releases", apiLimiter, releasesRoutes);
-app.use("/api/system", apiLimiter, systemRoutes);
 // SSE ticket endpoint (must be registered before /api/events)
 app.use("/api/events/ticket", apiLimiter, eventsTicketRoutes);
 // SSE - no rate limit, long-lived connections
 app.use("/api/events", eventsRoutes);
-app.use("/api/debug", apiLimiter, debugRouter);
-
-// Subsonic-compatible API — rate limiting is internal to the router
-app.use("/rest", subsonicRouter);
 
 // Health check (keep at root for simple container health checks)
 async function healthHandler(_req: express.Request, res: express.Response) {
@@ -294,26 +262,6 @@ async function checkPasswordReset() {
 }
 
 async function runStartupTasks() {
-    // Auto-sync audiobooks on startup if cache is empty
-    // This prevents "disappeared" audiobooks after container rebuilds
-    try {
-        const { getSystemSettings } = await import("./utils/systemSettings");
-        const settings = await getSystemSettings();
-        if (settings?.audiobookshelfEnabled && settings?.audiobookshelfUrl) {
-            const cachedCount = await prisma.audiobook.count();
-            if (cachedCount === 0) {
-                logger.debug("[STARTUP] Audiobook cache is empty - auto-syncing from Audiobookshelf...");
-                const { audiobookCacheService } = await import("./services/audiobookCache");
-                const result = await audiobookCacheService.syncAll();
-                logger.debug(`[STARTUP] Audiobook auto-sync complete: ${result.synced} audiobooks cached`);
-            } else {
-                logger.debug(`[STARTUP] Audiobook cache has ${cachedCount} entries - skipping auto-sync`);
-            }
-        }
-    } catch (err) {
-        logger.error("[STARTUP] Audiobook auto-sync failed:", err);
-    }
-
     // Auto-backfill artist counts if needed
     try {
         const { isBackfillNeeded, backfillAllArtistCounts } = await import("./services/artistCountsService");
@@ -359,14 +307,6 @@ async function main() {
     );
     server.keepAliveTimeout = 65_000;  // > common LB idle of 60s
     server.headersTimeout = 70_000;    // must exceed keepAliveTimeout
-    // Do NOT set server.timeout: it fires on socket INACTIVITY, and a paused
-    // audio stream is inactive (no bytes flow while backpressured), so it would
-    // destroy the stream's connection after the timeout and force a reconnect on
-    // resume -- a regression seen on both web and iOS after a multi-minute pause.
-    // Reap genuinely dead/half-open peers (mobile network gone without FIN/RST)
-    // via TCP keepalive instead: the OS drops the socket once probes fail, while
-    // a paused-but-alive stream keeps answering probes and stays connected.
-    server.timeout = 0;
     server.on("connection", (socket) => {
         socket.setKeepAlive(true, config.socketKeepAliveDelayMs);
     });
@@ -393,7 +333,7 @@ async function main() {
     const { scanQueue, discoverQueue, importQueue } = await import(
         "./workers/queues"
     );
-    const { artistQueue, trackQueue, vibeQueue, podcastQueue } = await import(
+    const { artistQueue, trackQueue, vibeQueue } = await import(
         "./workers/enrichmentQueues"
     );
 
@@ -408,7 +348,6 @@ async function main() {
             new BullMQAdapter(artistQueue),
             new BullMQAdapter(trackQueue),
             new BullMQAdapter(vibeQueue),
-            new BullMQAdapter(podcastQueue),
         ],
         serverAdapter,
     });
@@ -461,22 +400,6 @@ async function main() {
     }, TWENTY_FOUR_HOURS);
     logger.debug("Webhook event cleanup scheduled (daily, 30-day expiry)");
 
-    // Podcast cache cleanup - runs daily to remove cached episodes older than 30 days
-    const { cleanupExpiredCache } = await import("./services/podcastDownload");
-
-    // Run cleanup on startup (async, don't block)
-    cleanupExpiredCache().catch((err) => {
-        logger.error("Podcast cache cleanup failed:", err);
-    });
-
-    // Schedule daily cleanup (every 24 hours)
-    podcastCleanupInterval = setInterval(() => {
-        cleanupExpiredCache().catch((err) => {
-            logger.error("Scheduled podcast cache cleanup failed:", err);
-        });
-    }, TWENTY_FOUR_HOURS);
-    logger.debug("Podcast cache cleanup scheduled (daily, 30-day expiry)");
-
     // Reconcile download queue state with database
     const { downloadQueueManager } = await import("./services/downloadQueue");
     try {
@@ -503,7 +426,6 @@ main().catch((err) => {
 // Graceful shutdown handling
 let isShuttingDown = false;
 let healthCheckInterval: NodeJS.Timeout | null = null;
-let podcastCleanupInterval: NodeJS.Timeout | null = null;
 let webhookCleanupInterval: NodeJS.Timeout | null = null;
 
 async function gracefulShutdown(signal: string) {
@@ -522,7 +444,6 @@ async function gracefulShutdown(signal: string) {
 
         // Clear scheduled intervals
         if (healthCheckInterval) clearInterval(healthCheckInterval);
-        if (podcastCleanupInterval) clearInterval(podcastCleanupInterval);
         if (webhookCleanupInterval) clearInterval(webhookCleanupInterval);
 
         // Stop webhook reconciliation

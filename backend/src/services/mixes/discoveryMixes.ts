@@ -12,37 +12,48 @@ import {
 const TRACK_LIMIT = 20;
 
 export async function generateTopTracksMix(
-    userId: string
+    _userId: string
 ): Promise<ProgrammaticMix | null> {
-    const playStats = await prisma.play.groupBy({
-        by: ["trackId"],
-        where: { userId },
-        _count: { trackId: true },
-        orderBy: { _count: { trackId: "desc" } },
-        take: TRACK_LIMIT,
+    // No play history: "top" tracks come from the most recently synced
+    // library albums (metadata signal replacing play counts)
+    const recentAlbums = await prisma.album.findMany({
+        where: { location: "LIBRARY" },
+        orderBy: { lastSynced: "desc" },
+        take: 50,
+        select: { id: true },
     });
 
-    logger.debug(
-        `[TOP TRACKS MIX] Found ${playStats.length} unique played tracks`
-    );
-    if (playStats.length < 5) {
-        logger.debug(
-            `[TOP TRACKS MIX] FAILED: Only ${playStats.length} tracks (need at least 5)`
-        );
+    if (recentAlbums.length === 0) {
+        logger.debug(`[TOP TRACKS MIX] FAILED: No library albums found`);
         return null;
     }
 
-    const trackIds = playStats.map((p) => p.trackId);
     const tracks = await prisma.track.findMany({
-        where: { id: { in: trackIds } },
+        where: { albumId: { in: recentAlbums.map((a) => a.id) } },
         include: {
             album: { select: { coverUrl: true } },
         },
     });
 
-    const orderedTracks = trackIds
-        .map((id) => tracks.find((t) => t.id === id))
-        .filter((t) => t !== undefined);
+    logger.debug(
+        `[TOP TRACKS MIX] Found ${tracks.length} tracks from recent albums`
+    );
+    if (tracks.length < 5) {
+        logger.debug(
+            `[TOP TRACKS MIX] FAILED: Only ${tracks.length} tracks (need at least 5)`
+        );
+        return null;
+    }
+
+    // Keep a deterministic recency order (most recently synced album first)
+    const albumOrder = new Map(recentAlbums.map((a, i) => [a.id, i]));
+    const orderedTracks = [...tracks]
+        .sort(
+            (a, b) =>
+                (albumOrder.get(a.albumId) ?? 0) -
+                (albumOrder.get(b.albumId) ?? 0)
+        )
+        .slice(0, TRACK_LIMIT);
 
     const coverUrls = orderedTracks
         .filter((t) => t.album.coverUrl)
@@ -53,7 +64,7 @@ export async function generateTopTracksMix(
         id: "top-tracks",
         type: "top-tracks",
         name: "Your Top 20",
-        description: "Your most played tracks",
+        description: "Highlights from your most recent albums",
         trackIds: orderedTracks.map((t) => t.id),
         coverUrls,
         trackCount: orderedTracks.length,
@@ -62,31 +73,26 @@ export async function generateTopTracksMix(
 }
 
 export async function generateRediscoverMix(
-    userId: string,
+    _userId: string,
     today: string
 ): Promise<ProgrammaticMix | null> {
+    // No play history: the "underplayed" filter is gone, so sample directly
+    // from the library catalog
     const allTracks = await prisma.track.findMany({
         where: {
             album: { location: "LIBRARY" },
         },
         take: 5000,
         include: {
-            _count: {
-                select: {
-                    plays: { where: { userId } },
-                },
-            },
             album: { select: { coverUrl: true } },
         },
     });
 
-    const underplayedTracks = allTracks.filter((t) => t._count.plays <= 2);
-
-    if (underplayedTracks.length < 5) return null;
+    if (allTracks.length < 5) return null;
 
     const seed = getSeededRandom(`rediscover-${today}`);
     let random = seed;
-    const shuffled = underplayedTracks.sort(() => {
+    const shuffled = allTracks.sort(() => {
         random = (random * 9301 + 49297) % 233280;
         return random / 233280 - 0.5;
     });
@@ -110,44 +116,22 @@ export async function generateRediscoverMix(
 }
 
 export async function generateArtistSimilarMix(
-    userId: string
+    _userId: string
 ): Promise<ProgrammaticMix | null> {
-    const recentPlays = await prisma.play.findMany({
-        where: {
-            userId,
-            playedAt: {
-                gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-            },
-        },
-        include: {
-            track: {
-                include: {
-                    album: { select: { artistId: true } },
-                },
-            },
-        },
+    // No play history: anchor on the artist with the most albums in the library.
+    const topArtistRows = await prisma.album.groupBy({
+        by: ["artistId"],
+        where: { location: "LIBRARY" },
+        _count: true,
+        orderBy: { _count: { artistId: "desc" } },
+        take: 1,
     });
 
-    logger.debug(
-        `[ARTIST SIMILAR MIX] Found ${recentPlays.length} plays in last 7 days`
-    );
-    if (recentPlays.length === 0) {
-        logger.debug(`[ARTIST SIMILAR MIX] FAILED: No plays in last 7 days`);
+    const topArtistId = topArtistRows[0]?.artistId;
+    if (!topArtistId) {
+        logger.debug(`[ARTIST SIMILAR MIX] FAILED: No library albums found`);
         return null;
     }
-
-    const artistPlayCounts = new Map<string, number>();
-    recentPlays.forEach((play) => {
-        const artistId = play.track.album.artistId;
-        artistPlayCounts.set(
-            artistId,
-            (artistPlayCounts.get(artistId) || 0) + 1
-        );
-    });
-
-    const topArtistId = Array.from(artistPlayCounts.entries()).sort(
-        (a, b) => b[1] - a[1]
-    )[0][0];
 
     const topArtist = await prisma.artist.findUnique({
         where: { id: topArtistId },

@@ -22,7 +22,8 @@ jest.mock("../../discovery/optimisticBatchUpdate", () => ({
 //   prisma.discoveryBatch.findUnique (:871)   -- batch lookup + idempotency guard
 //   prisma.downloadJob.findMany     (:887)    -- completed jobs -> searchCriteria
 //   prisma.track.findMany           (:930)    -- MBID track search (returns a hit)
-//   prisma.track.findMany           (:1180)   -- popular-library anchor fallback
+//   prisma.album.groupBy            (:1180)   -- popular artists by album count
+//   prisma.track.findMany           (:1195)   -- popular-library anchor fallback
 // After the catch, cleanupFailedArtists (:1825) and cleanupOrphanedLidarrQueue
 // (:1718) re-read prisma.discoveryBatch.findUnique and iterate batch.jobs, so
 // the findUnique fixture MUST carry `jobs: []` or those post-catch calls throw
@@ -32,6 +33,7 @@ jest.mock("../../../utils/db", () => ({
         discoveryBatch: { findUnique: jest.fn(), update: jest.fn() },
         downloadJob: { findMany: jest.fn().mockResolvedValue([]) },
         track: { findMany: jest.fn().mockResolvedValue([]) },
+        album: { groupBy: jest.fn().mockResolvedValue([]) },
         $transaction: jest.fn(),
     },
 }));

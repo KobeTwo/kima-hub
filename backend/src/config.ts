@@ -37,12 +37,7 @@ try {
 // Music config - will be initialized async
 let musicConfig: MusicConfig = {
     musicPath: process.env.MUSIC_PATH || "/music",
-    transcodeCachePath:
-        process.env.TRANSCODE_CACHE_PATH || "./cache/transcodes",
-    transcodeCacheMaxGb: parseInt(
-        process.env.TRANSCODE_CACHE_MAX_GB || "10",
-        10
-    ),
+    cacheDir: process.env.CACHE_DIR || "./cache",
 };
 
 // Initialize music configuration asynchronously

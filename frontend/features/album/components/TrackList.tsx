@@ -1,21 +1,14 @@
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/Card";
-import { Play, Pause, Volume2, ListPlus, Plus } from "lucide-react";
+import { Pause, Plus, Volume2 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { Track, Album, AlbumSource } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
-import { formatNumber } from "@/utils/formatNumber";
-import { useDoubleTap } from "@/hooks/useDoubleTap";
 
 interface TrackListProps {
     tracks: Track[];
     album: Album;
     source: AlbumSource;
-    currentTrackId: string | undefined;
-    colors: ColorPalette | null;
-    onPlayTrack: (track: Track, index: number) => void;
-    onAddToQueue: (track: Track) => void;
     onAddToPlaylist: (trackId: string) => void;
     previewTrack: string | null;
     previewPlaying: boolean;
@@ -27,16 +20,10 @@ interface TrackRowProps {
     index: number;
     album: Album;
     isOwned: boolean;
-    isPlaying: boolean;
     isPreviewPlaying: boolean;
-    colors: ColorPalette | null;
-    onPlayTrack: (track: Track, index: number) => void;
-    onAddToQueue: (track: Track) => void;
     onAddToPlaylist: (trackId: string) => void;
     onPreview: (track: Track, e: React.MouseEvent) => void;
 }
-
-
 
 const TrackRow = memo(
     function TrackRow({
@@ -44,11 +31,7 @@ const TrackRow = memo(
         index,
         album,
         isOwned,
-        isPlaying,
         isPreviewPlaying,
-        colors,
-        onPlayTrack,
-        onAddToQueue,
         onAddToPlaylist,
         onPreview,
     }: TrackRowProps) {
@@ -56,14 +39,6 @@ const TrackRow = memo(
         const isPreviewOnly = !isOwned || isMissingTrack;
         const displayTrackNumber =
             typeof track.trackNumber === "number" ? track.trackNumber : index + 1;
-
-        const handleAddToQueue = useCallback(
-            (e: React.MouseEvent) => {
-                e.stopPropagation();
-                onAddToQueue(track);
-            },
-            [track, onAddToQueue]
-        );
 
         const handleAddToPlaylist = useCallback(
             (e: React.MouseEvent) => {
@@ -75,28 +50,11 @@ const TrackRow = memo(
 
         const handlePreview = useCallback(
             (e: React.MouseEvent) => {
+                e.stopPropagation();
                 onPreview(track, e);
             },
             [track, onPreview]
         );
-
-        const handlePlayTrack = useCallback(() => {
-            onPlayTrack(track, index);
-        }, [track, index, onPlayTrack]);
-
-        const handleRowClick = useCallback(
-            (e?: React.MouseEvent) => {
-                // For unowned tracks, play preview instead of local file
-                if (isPreviewOnly && e) {
-                    onPreview(track, e);
-                } else {
-                    onPlayTrack(track, index);
-                }
-            },
-            [isPreviewOnly, track, index, onPlayTrack, onPreview]
-        );
-
-        const doubleTapProps = useDoubleTap(handleRowClick);
 
         return (
             <div
@@ -105,60 +63,18 @@ const TrackRow = memo(
                 data-tv-card-index={index}
                 tabIndex={0}
                 className={cn(
-                    "group relative flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer touch-manipulation",
-                    isPlaying && "bg-[var(--bg-hover)] border-l-2",
+                    "group relative flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 hover:bg-[var(--bg-tertiary)] transition-colors touch-manipulation",
                     isPreviewOnly && "opacity-70 hover:opacity-90"
                 )}
-                style={
-                    isPlaying
-                        ? { borderLeftColor: colors?.vibrant || "#a855f7" }
-                        : undefined
-                }
-                {...doubleTapProps}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (isPreviewOnly) {
-                            onPreview(track, e as unknown as React.MouseEvent);
-                        } else {
-                            handlePlayTrack();
-                        }
-                    }
-                }}
             >
                 <div className="w-6 md:w-8 flex-shrink-0 text-center">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleRowClick(e);
-                        }}
-                        className="w-full flex items-center justify-center"
-                        aria-label={isPlaying ? "Pause" : "Play"}
-                    >
-                        <span
-                            className={cn(
-                                "group-hover:hidden text-sm",
-                                isPlaying
-                                    ? "text-purple-400 font-bold"
-                                    : "text-gray-500"
-                            )}
-                        >
-                            {displayTrackNumber}
-                        </span>
-                        <Play
-                            className="hidden group-hover:inline-block w-4 h-4 text-white"
-                            fill="currentColor"
-                        />
-                    </button>
+                    <span className="text-sm text-gray-500">
+                        {displayTrackNumber}
+                    </span>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <div
-                        className={cn(
-                            "font-medium truncate text-sm md:text-base flex items-center gap-2",
-                            isPlaying ? "text-purple-400" : "text-white"
-                        )}
-                    >
+                    <div className="text-sm md:text-base flex items-center gap-2 text-white">
                         <span className="truncate">
                             {track.displayTitle ?? track.title}
                         </span>
@@ -181,34 +97,15 @@ const TrackRow = memo(
                         )}
                 </div>
 
-                {isOwned &&
-                    track.playCount !== undefined &&
-                    track.playCount > 0 && (
-                        <div className="hidden lg:flex items-center gap-1.5 text-xs text-gray-400 bg-[var(--bg-hover)] px-2 py-1 rounded-full">
-                            <Play className="w-3 h-3" />
-                            <span>{formatNumber(track.playCount)}</span>
-                        </div>
-                    )}
-
                 {isOwned && !isMissingTrack && (
-                    <>
-                        <button
-                            onClick={handleAddToQueue}
-                            className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-2 hover:bg-[#2a2a2a] rounded-full transition-all text-gray-400 hover:text-white"
-                            aria-label="Add to queue"
-                            title="Add to queue"
-                        >
-                            <ListPlus className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={handleAddToPlaylist}
-                            className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-2 hover:bg-[#2a2a2a] rounded-full transition-all text-gray-400 hover:text-white"
-                            aria-label="Add to playlist"
-                            title="Add to playlist"
-                        >
-                            <Plus className="w-4 h-4" />
-                        </button>
-                    </>
+                    <button
+                        onClick={handleAddToPlaylist}
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-2 hover:bg-[#2a2a2a] rounded-full transition-all text-gray-400 hover:text-white"
+                        aria-label="Add to playlist"
+                        title="Add to playlist"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </button>
                 )}
 
                 {isPreviewOnly ? (
@@ -238,7 +135,6 @@ const TrackRow = memo(
     (prevProps, nextProps) => {
         return (
             prevProps.track.id === nextProps.track.id &&
-            prevProps.isPlaying === nextProps.isPlaying &&
             prevProps.isPreviewPlaying === nextProps.isPreviewPlaying &&
             prevProps.index === nextProps.index &&
             prevProps.isOwned === nextProps.isOwned
@@ -250,10 +146,6 @@ export const TrackList = memo(function TrackList({
     tracks,
     album,
     source,
-    currentTrackId,
-    colors,
-    onPlayTrack,
-    onAddToQueue,
     onAddToPlaylist,
     previewTrack,
     previewPlaying,
@@ -261,7 +153,14 @@ export const TrackList = memo(function TrackList({
 }: TrackListProps) {
     const isOwned = source === "library";
     const discNumbers = useMemo(
-        () => Array.from(new Set(tracks.map((track) => track.discNumber).filter((disc) => disc != null))),
+        () =>
+            Array.from(
+                new Set(
+                    tracks
+                        .map((track) => track.discNumber)
+                        .filter((disc) => disc != null)
+                )
+            ),
         [tracks]
     );
     const shouldGroupByDisc = discNumbers.length > 1;
@@ -274,7 +173,6 @@ export const TrackList = memo(function TrackList({
                     className="divide-y divide-[#1c1c1c]"
                 >
                     {tracks.map((track, index) => {
-                        const isPlaying = currentTrackId === track.id;
                         const isPreviewPlaying =
                             previewTrack === track.id && previewPlaying;
                         const discNumber = track.discNumber ?? 1;
@@ -289,7 +187,8 @@ export const TrackList = memo(function TrackList({
                             <React.Fragment key={track.id}>
                                 {showDiscHeader && (
                                     <div className="px-3 md:px-4 py-2 text-xs font-semibold tracking-wide text-gray-400 uppercase bg-[#121212]">
-                                        Disc {discNumber}{discLabel ? ` -- ${discLabel}` : ""}
+                                        Disc {discNumber}
+                                        {discLabel ? ` -- ${discLabel}` : ""}
                                     </div>
                                 )}
                                 <TrackRow
@@ -297,11 +196,7 @@ export const TrackList = memo(function TrackList({
                                     index={index}
                                     album={album}
                                     isOwned={isOwned}
-                                    isPlaying={isPlaying}
                                     isPreviewPlaying={isPreviewPlaying}
-                                    colors={colors}
-                                    onPlayTrack={onPlayTrack}
-                                    onAddToQueue={onAddToQueue}
                                     onAddToPlaylist={onAddToPlaylist}
                                     onPreview={onPreview}
                                 />

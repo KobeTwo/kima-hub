@@ -8,9 +8,7 @@ import { usePlaylistsQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { useAuth } from "@/lib/auth-context";
-import { useAudioControls } from "@/lib/audio-context";
 import {
-    Play,
     Music,
     Eye,
     EyeOff,
@@ -137,13 +135,11 @@ function PlaylistMosaic({
 function PlaylistCard({
     playlist,
     index,
-    onPlay,
     onToggleHide,
     isHiddenView = false,
 }: {
     playlist: Playlist;
     index: number;
-    onPlay: (playlistId: string) => void;
     onToggleHide: (playlistId: string, hide: boolean) => void;
     isHiddenView?: boolean;
 }) {
@@ -205,23 +201,6 @@ function PlaylistCard({
                             )}
                         </button>
                     )}
-
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onPlay(playlist.id);
-                        }}
-                        className={cn(
-                            "absolute bottom-2 right-2 w-10 h-10 rounded-lg flex items-center justify-center",
-                            "bg-brand shadow-lg shadow-[#fca208]/20 transition-all duration-200",
-                            "hover:bg-[#f97316] hover:scale-105",
-                            "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
-                        )}
-                        title="Play playlist"
-                    >
-                        <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
-                    </button>
 
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-brand to-[#f97316] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-150 origin-left" />
                 </div>
@@ -697,7 +676,6 @@ function EmptyState({
 export default function PlaylistsPage() {
     useRouter();
     useAuth();
-    const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
     const [activeAction, setActiveAction] = useState<ActionPanel>(null);
@@ -734,31 +712,6 @@ export default function PlaylistsPage() {
             window.removeEventListener("playlist-deleted", handlePlaylistEvent);
         };
     }, [queryClient]);
-
-    const handlePlayPlaylist = async (playlistId: string) => {
-        try {
-            const playlist = await api.getPlaylist(playlistId);
-            if (playlist?.items && playlist.items.length > 0) {
-                const tracks = playlist.items.map((item: { track: { id: string; title: string; duration: number; album?: { id?: string; title?: string; coverArt?: string; artist?: { id?: string; name?: string } } } }) => ({
-                    id: item.track.id,
-                    title: item.track.title,
-                    artist: {
-                        name: item.track.album?.artist?.name || "Unknown",
-                        id: item.track.album?.artist?.id,
-                    },
-                    album: {
-                        title: item.track.album?.title || "Unknown",
-                        coverArt: item.track.album?.coverArt,
-                        id: item.track.album?.id,
-                    },
-                    duration: item.track.duration,
-                }));
-                playTracks(tracks, 0);
-            }
-        } catch (error) {
-            console.error("Failed to play playlist:", error);
-        }
-    };
 
     const handleToggleHide = async (playlistId: string, hide: boolean) => {
         try {
@@ -924,7 +877,6 @@ export default function PlaylistsPage() {
                                             key={playlist.id}
                                             playlist={playlist}
                                             index={index}
-                                            onPlay={handlePlayPlaylist}
                                             onToggleHide={handleToggleHide}
                                             isHiddenView={showHiddenTab}
                                         />

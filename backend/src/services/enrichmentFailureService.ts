@@ -10,7 +10,7 @@ import { prisma } from "../utils/db";
 
 export interface EnrichmentFailure {
     id: string;
-    entityType: "artist" | "track" | "audio" | "vibe" | "podcast" | "scan";
+    entityType: "artist" | "track" | "audio" | "vibe" | "scan";
     entityId: string;
     entityName: string | null;
     errorMessage: string | null;
@@ -27,7 +27,7 @@ export interface EnrichmentFailure {
 }
 
 export interface RecordFailureInput {
-    entityType: "artist" | "track" | "audio" | "vibe" | "podcast" | "scan";
+    entityType: "artist" | "track" | "audio" | "vibe" | "scan";
     entityId: string;
     entityName?: string;
     errorMessage: string;
@@ -36,7 +36,7 @@ export interface RecordFailureInput {
 }
 
 export interface GetFailuresOptions {
-    entityType?: "artist" | "track" | "audio" | "vibe" | "podcast" | "scan";
+    entityType?: "artist" | "track" | "audio" | "vibe" | "scan";
     includeSkipped?: boolean;
     includeResolved?: boolean;
     limit?: number;
@@ -141,10 +141,9 @@ class EnrichmentFailureService {
         track: number;
         audio: number;
         vibe: number;
-        podcast: number;
         total: number;
     }> {
-        const [artistCount, trackCount, audioCount, vibeCount, podcastCount] = await Promise.all([
+        const [artistCount, trackCount, audioCount, vibeCount] = await Promise.all([
             prisma.enrichmentFailure.count({
                 where: {
                     entityType: "artist",
@@ -161,9 +160,6 @@ class EnrichmentFailureService {
             prisma.enrichmentFailure.count({
                 where: { entityType: "vibe", resolved: false, skipped: false },
             }),
-            prisma.enrichmentFailure.count({
-                where: { entityType: "podcast", resolved: false, skipped: false },
-            }),
         ]);
 
         return {
@@ -171,8 +167,7 @@ class EnrichmentFailureService {
             track: trackCount,
             audio: audioCount,
             vibe: vibeCount,
-            podcast: podcastCount,
-            total: artistCount + trackCount + audioCount + vibeCount + podcastCount,
+            total: artistCount + trackCount + audioCount + vibeCount,
         };
     }
 
@@ -243,7 +238,7 @@ class EnrichmentFailureService {
     /**
      * Clear all unresolved failures (optionally filtered by type)
      */
-    async clearAllFailures(entityType?: "artist" | "track" | "audio" | "vibe" | "podcast" | "scan"): Promise<number> {
+    async clearAllFailures(entityType?: "artist" | "track" | "audio" | "vibe" | "scan"): Promise<number> {
         const where: any = {
             resolved: false,
             skipped: false,
@@ -348,12 +343,6 @@ class EnrichmentFailureService {
                     select: { id: true },
                 });
                 exists = !!track;
-            } else if (failure.entityType === "podcast") {
-                const podcast = await prisma.podcast.findUnique({
-                    where: { id: failure.entityId },
-                    select: { id: true },
-                });
-                exists = !!podcast;
             } else {
                 // Unknown entity type — treat as existing to avoid silent deletion
                 exists = true;

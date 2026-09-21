@@ -72,81 +72,6 @@ model Artist {
   @@index([enrichmentStatus])
 }
 
-model Audiobook {
-  id             String                   @id @default(cuid())
-  title          String
-  author         String?
-  narrator       String?
-  description    String?
-  publishedYear  Int?
-  publisher      String?
-  series         String?
-  seriesSequence String?
-  duration       Float?
-  numTracks      Int?
-  tracksJson     Json?
-  sectionsJson   Json?
-  size           BigInt?
-  isbn           String?
-  asin           String?
-  language       String?
-  genres         String[]
-  tags           String[]
-  localCoverPath String?
-  coverUrl       String?
-  audioUrl       String
-  libraryId      String?
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-  lastSyncedAt   DateTime                 @default(now())
-  searchVector   Unsupported("tsvector")?
-}
-
-model AudiobookProgress {
-  id               String   @id @default(cuid())
-  userId           String
-  audiobookshelfId String
-  title            String
-  author           String?
-  coverUrl         String?
-  currentTime      Float    @default(0)
-  duration         Float    @default(0)
-  isFinished       Boolean  @default(false)
-  lastPlayedAt     DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdAt        DateTime @default(now())
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, audiobookshelfId])
-}
-
-model CachedTrack {
-  id             String   @id @default(cuid())
-  userId         String
-  trackId        String
-  localPath      String
-  quality        String
-  fileSizeMb     Float
-  cachedAt       DateTime @default(now())
-  lastAccessedAt DateTime @default(now())
-  track          Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, trackId, quality])
-}
-
-model DeviceLinkCode {
-  id         String    @id @default(cuid())
-  code       String    @unique
-  userId     String
-  expiresAt  DateTime
-  usedAt     DateTime?
-  deviceName String?
-  apiKeyId   String?
-  createdAt  DateTime  @default(now())
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 model DiscoverExclusion {
   id              String   @id @default(cuid())
   userId          String
@@ -208,7 +133,6 @@ model DiscoveryTrack {
   filePath         String
   inPlaylistCount  Int            @default(0)
   userKept         Boolean        @default(false)
-  lastPlayedAt     DateTime?
   discoveryAlbum   DiscoveryAlbum @relation(fields: [discoveryAlbumId], references: [id], onDelete: Cascade)
 }
 
@@ -299,19 +223,6 @@ model LikedTrack {
   @@id([userId, trackId])
 }
 
-model ListeningState {
-  id         String   @id @default(cuid())
-  userId     String
-  kind       String
-  entityId   String
-  trackId    String?
-  positionMs Int      @default(0)
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, kind, entityId])
-}
-
 model MoodBucket {
   id        String   @id @default(cuid())
   trackId   String
@@ -344,30 +255,6 @@ model OwnedAlbum {
   artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@id([artistId, rgMbid])
-}
-
-model Play {
-  id       String       @id @default(cuid())
-  userId   String
-  trackId  String
-  playedAt DateTime     @default(now())
-  source   ListenSource @default(LIBRARY)
-  track    Track        @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model PlaybackState {
-  userId       String   @id
-  playbackType String
-  trackId      String?
-  audiobookId  String?
-  podcastId    String?
-  queue        Json?
-  currentIndex Int      @default(0)
-  isShuffle    Boolean  @default(false)
-  updatedAt    DateTime @updatedAt
-  createdAt    DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Playlist {
@@ -416,94 +303,6 @@ model PlaylistPendingTrack {
   @@unique([playlistId, spotifyArtist, spotifyTitle])
 }
 
-model Podcast {
-  id              String                   @id @default(cuid())
-  feedUrl         String                   @unique
-  title           String
-  author          String?
-  description     String?
-  imageUrl        String?
-  localCoverPath  String?
-  itunesId        String?                  @unique
-  language        String?
-  explicit        Boolean                  @default(false)
-  episodeCount    Int                      @default(0)
-  lastRefreshed   DateTime                 @default(now())
-  refreshInterval Int                      @default(3600)
-  autoRefresh     Boolean                  @default(true)
-  feedEtag        String?
-  feedLastModified String?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  searchVector    Unsupported("tsvector")?
-  episodes        PodcastEpisode[]
-  subscriptions   PodcastSubscription[]
-}
-
-model PodcastDownload {
-  id             String         @id @default(cuid())
-  userId         String
-  episodeId      String
-  localPath      String
-  fileSizeMb     Float
-  downloadedAt   DateTime       @default(now())
-  lastAccessedAt DateTime       @default(now())
-  episode        PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, episodeId])
-}
-
-model PodcastEpisode {
-  id             String                   @id @default(cuid())
-  podcastId      String
-  guid           String
-  title          String
-  description    String?
-  audioUrl       String
-  duration       Int                      @default(0)
-  publishedAt    DateTime
-  episodeNumber  Int?
-  season         Int?
-  imageUrl       String?
-  localCoverPath String?
-  fileSize       Int?
-  mimeType       String?                  @default("audio/mpeg")
-  createdAt      DateTime                 @default(now())
-  searchVector   Unsupported("tsvector")?
-  podcast        Podcast                  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
-  progress       PodcastProgress[]
-  downloads      PodcastDownload[]
-
-  @@unique([podcastId, guid])
-}
-
-model PodcastProgress {
-  id           String         @id @default(cuid())
-  userId       String
-  episodeId    String
-  currentTime  Float          @default(0)
-  duration     Float          @default(0)
-  isFinished   Boolean        @default(false)
-  lastPlayedAt DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  createdAt    DateTime       @default(now())
-  episode      PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, episodeId])
-}
-
-model PodcastSubscription {
-  userId       String
-  podcastId    String
-  subscribedAt DateTime @default(now())
-  podcast      Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([userId, podcastId])
-}
-
 model SimilarArtist {
   fromArtistId String
   toArtistId   String
@@ -546,9 +345,6 @@ model SystemSettings {
   openaiBaseUrl               String?
   fanartEnabled               Boolean  @default(false)
   fanartApiKey                String?
-  audiobookshelfEnabled       Boolean  @default(false)
-  audiobookshelfUrl           String?  @default("http://localhost:13378")
-  audiobookshelfApiKey        String?
   soulseekUsername            String?
   soulseekPassword            String?
   soulseekMode                String?  @default("p2p")
@@ -562,7 +358,6 @@ model SystemSettings {
   autoEnrichMetadata          Boolean  @default(true)
   maxConcurrentDownloads      Int      @default(3)
   downloadRetryAttempts       Int      @default(3)
-  transcodeCacheMaxGb         Int      @default(10)
   downloadSource              String   @default("soulseek")
   primaryFailureFallback      String   @default("none")
   updatedAt                   DateTime @updatedAt
@@ -649,14 +444,10 @@ model Track {
   vibeAnalysisRetryCount      Int                      @default(0)
   vibeAnalysisStatusUpdatedAt DateTime?
   album                       Album                    @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  cachedBy                    CachedTrack[]
   likedBy                     LikedTrack[]
   moodBuckets                 MoodBucket[]
-  plays                       Play[]
   playlistItems               PlaylistItem[]
   trackGenres                 TrackGenre[]
-  transcodedFiles             TranscodedFile[]
-  subsonicBookmarks           SubsonicBookmark[]
   trackLyrics                 TrackLyrics?
 
   @@index([analysisStatus])
@@ -673,19 +464,6 @@ model TrackGenre {
   genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
   @@id([trackId, genreId])
-}
-
-model TranscodedFile {
-  id             String   @id @default(cuid())
-  trackId        String
-  quality        String
-  cachePath      String   @unique
-  cacheSize      BigInt
-  sourceSize     BigInt   @default(0)
-  sourceModified DateTime
-  lastAccessed   DateTime @default(now())
-  createdAt      DateTime @default(now())
-  track          Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
 }
 
 model UnavailableAlbum {
@@ -723,30 +501,18 @@ model User {
   tokenVersion           Int                   @default(0)
   createdAt              DateTime              @default(now())
   apiKeys                ApiKey[]
-  audiobookProgress      AudiobookProgress[]
-  cachedTracks           CachedTrack[]
-  deviceLinkCodes        DeviceLinkCode[]
   discoverExclusions     DiscoverExclusion[]
   discoveryAlbums        DiscoveryAlbum[]
   dislikedEntities       DislikedEntity[]
   downloadJobs           DownloadJob[]
   hiddenPlaylists        HiddenPlaylist[]
   likedTracks            LikedTrack[]
-  listeningState         ListeningState[]
   notifications          Notification[]
-  plays                  Play[]
-  playbackState          PlaybackState?
   playlists              Playlist[]
-  podcastDownloads       PodcastDownload[]
-  podcastProgress        PodcastProgress[]
-  podcastSubscriptions   PodcastSubscription[]
   spotifyImportJobs      SpotifyImportJob[]
   unavailableAlbums      UnavailableAlbum[]
   discoverConfig         UserDiscoverConfig?
-  settings               UserSettings?
   shareLinks             ShareLink[]
-  subsonicBookmarks      SubsonicBookmark[]
-  subsonicPlayQueue      SubsonicPlayQueue?
 }
 
 model UserDiscoverConfig {
@@ -772,15 +538,6 @@ model UserMoodMix {
   updatedAt   DateTime @updatedAt
 }
 
-model UserSettings {
-  userId          String  @id
-  playbackQuality String  @default("original")
-  wifiOnly        Boolean @default(false)
-  offlineEnabled  Boolean @default(false)
-  maxCacheSizeMb  Int     @default(10240)
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 model WebhookEvent {
   id            String    @id @default(cuid())
   eventId       String    @unique
@@ -799,26 +556,6 @@ model WebhookEvent {
   @@index([processed])
   @@index([source, eventType])
 }
-
-model PodcastRecommendation {
-  id            String   @id @default(cuid())
-  podcastId     String
-  recommendedId String
-  title         String
-  author        String?
-  description   String?
-  coverUrl      String?
-  episodeCount  Int      @default(0)
-  feedUrl       String?
-  itunesId      String?
-  score         Float    @default(0)
-  cachedAt      DateTime @default(now())
-  expiresAt     DateTime
-
-  @@map("podcast_recommendations")
-}
-
-
 
 model TrackLyrics {
   track_id      String   @id
@@ -840,40 +577,11 @@ model ShareLink {
   entityId   String
   createdBy  String
   expiresAt  DateTime?
-  maxPlays   Int?
-  playCount  Int       @default(0)
   createdAt  DateTime  @default(now())
   user       User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
 
   @@index([entityType, entityId])
   @@map("share_links")
-}
-
-model SubsonicBookmark {
-  id       String   @id @default(cuid())
-  userId   String
-  trackId  String
-  position Int      @default(0)
-  comment  String?
-  created  DateTime @default(now())
-  changed  DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, trackId])
-  @@map("subsonic_bookmarks")
-}
-
-model SubsonicPlayQueue {
-  userId    String   @id
-  current   String?
-  position  Int      @default(0)
-  trackIds  Json     @default("[]")
-  changedBy String   @default("")
-  changed   DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("subsonic_play_queue")
 }
 
 enum AlbumLocation {
@@ -886,11 +594,4 @@ enum DiscoverStatus {
   LIKED
   MOVED
   DELETED
-}
-
-enum ListenSource {
-  LIBRARY
-  DISCOVERY
-  DISCOVERY_KEPT
-  SUBSONIC
 }

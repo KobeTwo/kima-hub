@@ -298,11 +298,10 @@ class ApiClient {
     async request<T>(
         endpoint: string,
         options: RequestInit & {
-            silent404?: boolean;
             _retryCount?: number;
         } = {}
     ): Promise<T> {
-        const { silent404, _retryCount = 0, ...fetchOptions } = options;
+        const { _retryCount = 0, ...fetchOptions } = options;
         const headers: HeadersInit = {
             "Content-Type": "application/json",
             ...fetchOptions.headers,
@@ -336,15 +335,13 @@ class ApiClient {
                 };
             }
 
-            // Only log non-404 errors (404s are often expected)
-            if (!(silent404 && response.status === 404)) {
-                console.error(`[API] Request failed: ${url}`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    error,
-                    headers: Object.fromEntries(response.headers.entries()),
-                });
-            }
+            // Log API errors (404s are often expected but still useful in logs)
+            console.error(`[API] Request failed: ${url}`, {
+                status: response.status,
+                statusText: response.statusText,
+                error,
+                headers: Object.fromEntries(response.headers.entries()),
+            });
 
             // Handle 401 with token refresh (retry once)
             if (
@@ -494,12 +491,6 @@ class ApiClient {
         }>(`/library/artists?${toSearchParams(params as Record<string, string | number | boolean | undefined>).toString()}`);
     }
 
-    async getRecentlyListened(limit = 10) {
-        return this.request<{ items: ApiData[] }>(
-            `/library/recently-listened?limit=${limit}`
-        );
-    }
-
     async getRecentlyAdded(limit = 10) {
         return this.request<{ artists: ApiData[] }>(
             `/library/recently-added?limit=${limit}`
@@ -605,31 +596,6 @@ class ApiClient {
         }>(`/library/tracks/${trackId}/lyrics`);
     }
 
-    async getRadioTracks(type: string, value?: string, limit = 50) {
-        const params = new URLSearchParams({ type, limit: String(limit) });
-        if (value) params.append("value", value);
-        return this.request<{ tracks: ApiData[] }>(
-            `/library/radio?${params.toString()}`
-        );
-    }
-
-    // Streaming
-    getStreamUrl(trackId: string): string {
-        const baseUrl = `${this.getBaseUrl()}/api/library/tracks/${trackId}/stream`;
-        const token = this.getCurrentToken();
-        if (this.tokenExpiresWithin60Min()) void this.ensureFreshToken();
-        if (token) {
-            return `${baseUrl}?token=${encodeURIComponent(token)}`;
-        }
-        return baseUrl;
-    }
-
-    prewarmTrack(trackId: string): void {
-        void this.request<{ ok: boolean }>(`/library/tracks/${trackId}/prewarm`, {
-            method: "POST",
-        }).catch(() => {});
-    }
-
     /**
      * Get the current token, lazily loading from localStorage if needed.
      * This handles the case where the singleton was created during SSR
@@ -661,24 +627,6 @@ class ApiClient {
     getCoverArtUrl(coverId: string, size?: number, includeToken = true): string {
         const baseUrl = this.getBaseUrl();
         const token = includeToken ? this.getCurrentToken() : null;
-
-        // Check if this is an audiobook cover path (served by audiobooks endpoint, not proxied)
-        if (coverId && coverId.startsWith("/audiobooks/")) {
-            const url = `${baseUrl}/api${coverId}`;
-            if (token) {
-                return `${url}?token=${encodeURIComponent(token)}`;
-            }
-            return url;
-        }
-
-        // Check if this is a podcast cover path (served by podcasts endpoint, not proxied)
-        if (coverId && coverId.startsWith("/podcasts/")) {
-            const url = `${baseUrl}/api${coverId}`;
-            if (token) {
-                return `${url}?token=${encodeURIComponent(token)}`;
-            }
-            return url;
-        }
 
         // Check if coverId is an external URL (needs to be proxied)
         // Also handle native: paths which need URL encoding
@@ -822,25 +770,6 @@ class ApiClient {
         return baseUrl;
     }
 
-    // Settings
-    async getSettings() {
-        return this.request<ApiData>("/settings");
-    }
-
-    async updateSettings(settings: ApiData) {
-        return this.request<ApiData>("/settings", {
-            method: "POST",
-            body: JSON.stringify(settings),
-        });
-    }
-
-    // System Features
-    async getFeatures(): Promise<{ musicCNN: boolean; audiobookshelfEnabled: boolean }> {
-        return this.request<{ musicCNN: boolean; audiobookshelfEnabled: boolean }>(
-            "/system/features"
-        );
-    }
-
     // System Settings
     async getSystemSettings() {
         return this.request<ApiData>("/system-settings");
@@ -900,13 +829,6 @@ class ApiClient {
         return this.request<ServiceTestResult>("/system-settings/test-fanart", {
             method: "POST",
             body: JSON.stringify({ fanartApiKey: apiKey }),
-        });
-    }
-
-    async testAudiobookshelf(url: string, apiKey: string) {
-        return this.request<ServiceTestResult>("/system-settings/test-audiobookshelf", {
-            method: "POST",
-            body: JSON.stringify({ url, apiKey }),
         });
     }
 
@@ -1117,213 +1039,6 @@ class ApiClient {
         return baseUrl;
     }
 
-    // Audiobooks
-    async getAudiobooks() {
-        return this.request<ApiData[]>("/audiobooks");
-    }
-
-    async getAudiobook(id: string) {
-        return this.request<ApiData>(`/audiobooks/${id}`);
-    }
-
-    async getAudiobookSeries(seriesName: string) {
-        return this.request<ApiData[]>(
-            `/audiobooks/series/${encodeURIComponent(seriesName)}`
-        );
-    }
-
-    getAudiobookStreamUrl(id: string, trackIndex = 0): string {
-        const baseUrl = `${this.getBaseUrl()}/api/audiobooks/${id}/stream`;
-        const token = this.getCurrentToken();
-        if (this.tokenExpiresWithin60Min()) void this.ensureFreshToken();
-        const params = new URLSearchParams();
-        if (token) params.set("token", token);
-        if (trackIndex > 0) params.set("trackIndex", String(trackIndex));
-        const qs = params.toString();
-        return qs ? `${baseUrl}?${qs}` : baseUrl;
-    }
-
-    async updateAudiobookProgress(
-        id: string,
-        currentTime: number,
-        duration: number,
-        isFinished: boolean = false
-    ) {
-        return this.request<ApiData>(`/audiobooks/${id}/progress`, {
-            method: "POST",
-            body: JSON.stringify({ currentTime, duration, isFinished }),
-        });
-    }
-
-    async deleteAudiobookProgress(id: string) {
-        return this.request<ApiData>(`/audiobooks/${id}/progress`, {
-            method: "DELETE",
-        });
-    }
-
-    // Podcasts
-    async getPodcasts() {
-        return this.request<ApiData[]>("/podcasts");
-    }
-
-    async getPodcast(id: string) {
-        return this.request<ApiData>(`/podcasts/${id}`, { silent404: true });
-    }
-
-    async previewPodcast(itunesId: string) {
-        // Bound the preview so a slow or dead feed can't spin the UI forever. On
-        // timeout the request aborts and the hook renders its error surface
-        // instead of an endless spinner (#168).
-        const controller = new AbortController();
-        // Headroom over the backend's worst-case preview time (~18s on the Deezer
-        // path: Deezer fetch + iTunes resolve + the 8s RSS bound) so a slow but
-        // answerable feed isn't aborted and shown as a false timeout (#168).
-        const timer = setTimeout(() => controller.abort(), 25000);
-        try {
-            return await this.request<ApiData>(`/podcasts/preview/${itunesId}`, { signal: controller.signal });
-        } catch (err) {
-            if (err instanceof DOMException && err.name === "AbortError") {
-                throw new Error("Podcast preview timed out. The feed may be slow or unreachable.");
-            }
-            throw err;
-        } finally {
-            clearTimeout(timer);
-        }
-    }
-
-    getPodcastEpisodeStreamUrl(podcastId: string, episodeId: string): string {
-        const baseUrl = `${this.getBaseUrl()}/api/podcasts/${podcastId}/episodes/${episodeId}/stream`;
-        const token = this.getCurrentToken();
-        if (this.tokenExpiresWithin60Min()) void this.ensureFreshToken();
-        if (token) {
-            return `${baseUrl}?token=${encodeURIComponent(token)}`;
-        }
-        return baseUrl;
-    }
-
-    /**
-     * Check if a podcast episode is cached locally
-     * Returns { cached: boolean, downloading: boolean, downloadProgress: number | null }
-     */
-    async getPodcastEpisodeCacheStatus(
-        podcastId: string,
-        episodeId: string
-    ): Promise<{
-        cached: boolean;
-        downloading: boolean;
-        downloadProgress: number | null;
-    }> {
-        return this.request<{
-            cached: boolean;
-            downloading: boolean;
-            downloadProgress: number | null;
-        }>(`/podcasts/${podcastId}/episodes/${episodeId}/cache-status`);
-    }
-
-    async updatePodcastEpisodeProgress(
-        podcastId: string,
-        episodeId: string,
-        currentTime: number,
-        duration: number,
-        isFinished: boolean = false
-    ) {
-        return this.request<ApiData>(
-            `/podcasts/${podcastId}/episodes/${episodeId}/progress`,
-            {
-                method: "POST",
-                body: JSON.stringify({ currentTime, duration, isFinished }),
-            }
-        );
-    }
-
-    async deletePodcastEpisodeProgress(podcastId: string, episodeId: string) {
-        return this.request<ApiData>(
-            `/podcasts/${podcastId}/episodes/${episodeId}/progress`,
-            {
-                method: "DELETE",
-            }
-        );
-    }
-
-    async getSimilarPodcasts(podcastId: string) {
-        return this.request<ApiData[]>(`/podcasts/${podcastId}/similar`);
-    }
-
-    async getTopPodcasts(limit = 20, genreId?: number) {
-        const params = new URLSearchParams({ limit: limit.toString() });
-        if (genreId) params.append("genreId", genreId.toString());
-        return this.request<ApiData[]>(
-            `/podcasts/discover/top?${params.toString()}`
-        );
-    }
-
-    async getPodcastsByGenre(genreIds: number[]) {
-        return this.request<ApiData>(
-            `/podcasts/discover/genres?genres=${genreIds.join(",")}`
-        );
-    }
-
-    async getPodcastsByGenrePaginated(genreId: number, limit = 20, offset = 0) {
-        return this.request<ApiData[]>(
-            `/podcasts/discover/genre/${genreId}?limit=${limit}&offset=${offset}`
-        );
-    }
-
-    async subscribePodcast(feedUrl: string, itunesId?: string) {
-        return this.request<{ success: boolean; podcast?: ApiData }>("/podcasts/subscribe", {
-            method: "POST",
-            body: JSON.stringify({ feedUrl, itunesId }),
-        });
-    }
-
-    async removePodcast(podcastId: string) {
-        return this.request<{ success: boolean; message: string }>(
-            `/podcasts/${podcastId}/unsubscribe`,
-            {
-                method: "DELETE",
-            }
-        );
-    }
-
-    async refreshPodcast(podcastId: string) {
-        return this.request<{ success: boolean; newEpisodesCount: number; totalEpisodes: number; message: string }>(
-            `/podcasts/${podcastId}/refresh`
-        );
-    }
-
-    async refreshAllPodcasts() {
-        return this.request<{ queued: number; total: number; message: string }>(
-            "/podcasts/refresh-all",
-            { method: "POST" }
-        );
-    }
-
-    // Playback State (cross-device sync)
-    async getPlaybackState() {
-        return this.request<ApiData>("/playback-state");
-    }
-
-    async savePlaybackState(state: {
-        playbackType: string;
-        trackId?: string;
-        audiobookId?: string;
-        podcastId?: string;
-        queue?: ApiData[];
-        currentIndex?: number;
-        isShuffle?: boolean;
-    }) {
-        return this.request<ApiData>("/playback-state", {
-            method: "POST",
-            body: JSON.stringify(state),
-        });
-    }
-
-    async clearPlaybackState() {
-        return this.request<void>("/playback-state", {
-            method: "DELETE",
-        });
-    }
-
     // Search
     async search(
         query: string,
@@ -1331,9 +1046,7 @@ class ApiClient {
             | "all"
             | "artists"
             | "albums"
-            | "tracks"
-            | "audiobooks"
-            | "podcasts" = "all",
+            | "tracks" = "all",
         limit: number = 20,
         signal?: AbortSignal
     ) {
@@ -1345,7 +1058,7 @@ class ApiClient {
 
     async discoverSearch(
         query: string,
-        type: "music" | "podcasts" | "all" = "music",
+        type: "music" | "all" = "music",
         limit: number = 20,
         signal?: AbortSignal
     ) {

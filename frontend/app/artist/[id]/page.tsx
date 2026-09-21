@@ -1,27 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-    useAudioState,
-    useAudioPlayback,
-    useAudioControls,
-} from "@/lib/audio-context";
+import { Download } from "lucide-react";
 import { useDownloadContext } from "@/lib/download-context";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
-import { useToast } from "@/lib/toast-context";
+import { cn } from "@/utils/cn";
 
 // Hooks
 import { useArtistData } from "@/features/artist/hooks/useArtistData";
-import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import type { Track, Album } from "@/features/artist/types";
 import { useTrackPreview } from "@/hooks/useTrackPreview";
 
 // Components
 import { ArtistHero } from "@/features/artist/components/ArtistHero";
-import { ArtistActionBar } from "@/features/artist/components/ArtistActionBar";
 import { ArtistBio } from "@/features/artist/components/ArtistBio";
 import { PopularTracks } from "@/features/artist/components/PopularTracks";
 import { Discography } from "@/features/artist/components/Discography";
@@ -29,12 +23,7 @@ import { AvailableAlbums } from "@/features/artist/components/AvailableAlbums";
 import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
 
 export default function ArtistPage() {
-    const { toast } = useToast();
     const router = useRouter();
-    // Use split hooks to avoid re-renders from currentTime updates
-    const { currentTrack } = useAudioState();
-    const { isPlaying } = useAudioPlayback();
-    const { playTracks, pause } = useAudioControls();
     const { isPendingByMbid } = useDownloadContext();
 
     // Data hook
@@ -50,7 +39,6 @@ export default function ArtistPage() {
     } = useArtistData();
 
     // Action hooks
-    const { playAll, shufflePlay } = useArtistActions();
     const { downloadArtist, downloadAlbum } = useDownloadActions();
     const { previewTrack, previewPlaying, handlePreview } = useTrackPreview();
 
@@ -75,78 +63,9 @@ export default function ArtistPage() {
 
     const { colors } = useImageColor(lowResImage || rawImageUrl);
 
-    // Play album handler
-    async function handlePlayAlbum(albumId: string, albumTitle: string) {
-        try {
-            const albumData = await api.getAlbum(albumId);
-            if (albumData.tracks && albumData.tracks.length > 0) {
-                const tracksWithAlbum = albumData.tracks.map((track: Record<string, unknown>) => ({
-                    ...track,
-                    album: {
-                        id: albumData.id,
-                        title: albumData.title,
-                        coverArt: albumData.coverArt,
-                    },
-                    artist: albumData.artist,
-                }));
-                playTracks(tracksWithAlbum, 0);
-                toast.success(`Playing ${albumTitle}`);
-            }
-        } catch {
-            toast.error("Failed to play album");
-        }
-    }
-
-    // Play track handler (for popular tracks)
-    function handlePlayTrack(track: Track) {
-        if (!artist?.topTracks) return;
-
-        const playableTracks = artist.topTracks.filter((t: Track) => t.album?.id);
-        const formattedTracks = playableTracks.map((t: Track) => ({
-            id: t.id,
-            title: t.title,
-            artist: { name: artist.name, id: artist.id },
-            album: {
-                title: t.album?.title || "Unknown",
-                coverArt: t.album?.coverArt,
-                id: t.album?.id,
-            },
-            duration: t.duration,
-        }));
-
-        const startIndex = formattedTracks.findIndex(
-            (t: { id: string }) => t.id === track.id,
-        );
-        playTracks(formattedTracks, Math.max(0, startIndex));
-    }
-
     // Download album handler
     function handleDownloadAlbum(album: Album, e: React.MouseEvent) {
         downloadAlbum(album, artist?.name || "", e);
-    }
-
-    // Start artist radio handler
-    async function handleStartRadio() {
-        if (!artist) return;
-
-        try {
-            toast.success(`Starting ${artist.name} Radio...`);
-            const response = await api.getRadioTracks("artist", artist.id);
-
-            if (response.tracks && response.tracks.length > 0) {
-                // Backend already returns properly formatted tracks - just pass them through
-                playTracks(response.tracks, 0);
-                toast.success(
-                    `Playing ${artist.name} Radio (${response.tracks.length} tracks)`,
-                );
-            } else {
-                toast.error(
-                    "Not enough similar music in your library for artist radio",
-                );
-            }
-        } catch {
-            toast.error("Failed to start artist radio");
-        }
     }
 
     // Loading state
@@ -177,6 +96,13 @@ export default function ArtistPage() {
         );
     }
 
+    const downloadableAlbums = albums.filter(
+        (album) => album.availability !== "unavailable"
+    );
+    const showDownloadAll =
+        source === "discovery" || downloadableAlbums.length > 0;
+    const isPendingDownload = isPendingByMbid(artist.mbid || "");
+
     return (
         <div className="min-h-screen flex flex-col">
             <ArtistHero
@@ -189,23 +115,23 @@ export default function ArtistPage() {
                 onReload={reloadArtist}
             >
                 {/* Action bar inside hero for visual continuity */}
-                <ArtistActionBar
-                    artist={artist}
-                    albums={albums}
-                    source={source}
-                    colors={colors}
-                    onPlayAll={() => playAll(artist, albums)}
-                    onShuffle={() => shufflePlay(artist, albums)}
-                    onDownloadAll={() => downloadArtist(artist)}
-                    onStartRadio={handleStartRadio}
-                    isPendingDownload={isPendingByMbid(artist.mbid || "")}
-                    isPlaying={isPlaying}
-                    isPlayingThisArtist={
-                        currentTrack?.artist?.id === artist.id ||
-                        currentTrack?.artist?.name === artist.name
-                    }
-                    onPause={pause}
-                />
+                {showDownloadAll && (
+                    <button
+                        onClick={() => downloadArtist(artist)}
+                        disabled={isPendingDownload}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all",
+                            isPendingDownload
+                                ? "bg-white/5 text-white/50 cursor-not-allowed"
+                                : "bg-white/5 hover:bg-white/10 text-white/80 hover:text-white"
+                        )}
+                    >
+                        <Download className="w-4 h-4" />
+                        <span className="hidden sm:inline">
+                            {isPendingDownload ? "Downloading..." : "Download All"}
+                        </span>
+                    </button>
+                )}
             </ArtistHero>
 
             {/* Main Content - fills remaining viewport height */}
@@ -233,9 +159,7 @@ export default function ArtistPage() {
                         <PopularTracks
                             tracks={artist.topTracks}
                             artist={artist}
-                            currentTrackId={currentTrack?.id}
                             colors={colors}
-                            onPlayTrack={handlePlayTrack}
                             previewTrack={previewTrack}
                             previewPlaying={previewPlaying}
                             onPreview={(track: Track, e: React.MouseEvent) =>
@@ -248,7 +172,6 @@ export default function ArtistPage() {
                     <Discography
                         albums={ownedAlbums}
                         colors={colors}
-                        onPlayAlbum={handlePlayAlbum}
                         sortBy={sortBy}
                         onSortChange={setSortBy}
                     />

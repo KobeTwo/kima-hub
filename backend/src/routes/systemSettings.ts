@@ -65,11 +65,6 @@ const systemSettingsSchema = z.object({
   lastfmUserKey: z.string().nullable().optional(),
   lastfmEnabled: z.boolean().nullable().optional(),
 
-  // Media Services
-  audiobookshelfEnabled: z.boolean().optional(),
-  audiobookshelfUrl: z.string().optional(),
-  audiobookshelfApiKey: z.string().nullable().optional(),
-
   // Soulseek (direct connection via vendored soulseek-ts)
   soulseekUsername: z.string().nullable().optional(),
   soulseekPassword: z.string().nullable().optional(),
@@ -117,7 +112,6 @@ const systemSettingsSchema = z.object({
   // Advanced Settings
   maxConcurrentDownloads: z.number().optional(),
   downloadRetryAttempts: z.number().optional(),
-  transcodeCacheMaxGb: z.number().optional(),
   soulseekConcurrentDownloads: z.number().min(1).max(10).optional(),
 
   // Download Preferences
@@ -146,15 +140,12 @@ router.get("/", async (req, res) => {
           openaiEnabled: false,
           openaiModel: "gpt-4",
           fanartEnabled: false,
-          audiobookshelfEnabled: false,
-          audiobookshelfUrl: "http://localhost:13378",
           musicPath: "/music",
           downloadPath: "/downloads",
           autoSync: true,
           autoEnrichMetadata: true,
           maxConcurrentDownloads: 3,
           downloadRetryAttempts: 3,
-          transcodeCacheMaxGb: 10,
           soulseekConcurrentDownloads: 4,
         },
       });
@@ -171,7 +162,6 @@ router.get("/", async (req, res) => {
       lastfmApiKey: safeDecrypt(settings.lastfmApiKey),
       lastfmApiSecret: safeDecrypt(settings.lastfmApiSecret),
       lastfmUserKey: safeDecrypt(settings.lastfmUserKey),
-      audiobookshelfApiKey: safeDecrypt(settings.audiobookshelfApiKey),
       soulseekPassword: safeDecrypt(settings.soulseekPassword),
       slskdApiKey: safeDecrypt(settings.slskdApiKey),
       spotifyClientSecret: safeDecrypt(settings.spotifyClientSecret),
@@ -191,10 +181,6 @@ router.post("/", async (req, res) => {
     const data = systemSettingsSchema.parse(req.body);
 
     logger.debug("[SYSTEM SETTINGS] Saving settings...");
-    logger.debug(
-      "[SYSTEM SETTINGS] transcodeCacheMaxGb:",
-      data.transcodeCacheMaxGb,
-    );
 
     // Encrypt sensitive fields
     const encryptedData: any = { ...data };
@@ -213,8 +199,6 @@ router.post("/", async (req, res) => {
       encryptedData.lastfmApiSecret = encrypt(data.lastfmApiSecret);
     if (data.lastfmUserKey)
       encryptedData.lastfmUserKey = encrypt(data.lastfmUserKey);
-    if (data.audiobookshelfApiKey)
-      encryptedData.audiobookshelfApiKey = encrypt(data.audiobookshelfApiKey);
     if (data.soulseekPassword)
       encryptedData.soulseekPassword = encrypt(data.soulseekPassword);
     if (data.slskdApiKey)
@@ -306,33 +290,10 @@ router.post("/", async (req, res) => {
     }
 
     try {
-      const { audiobookshelfService } = await import("../services/audiobookshelf");
-      audiobookshelfService.reinitialize();
-    } catch (err) {
-      logger.warn("[SYSTEM SETTINGS] Could not reinitialize Audiobookshelf service:", err);
-    }
-
-    try {
       const { fanartService } = await import("../services/fanart");
       fanartService.reinitialize();
     } catch (err) {
       logger.warn("[SYSTEM SETTINGS] Could not reinitialize Fanart service:", err);
-    }
-
-    // If Audiobookshelf was disabled, clear all audiobook-related data
-    if (data.audiobookshelfEnabled === false) {
-      logger.debug(
-        "[CLEANUP] Audiobookshelf disabled - clearing all audiobook data from database",
-      );
-      try {
-        const deletedProgress = await prisma.audiobookProgress.deleteMany({});
-        logger.debug(
-          `   Deleted ${deletedProgress.count} audiobook progress entries`,
-        );
-      } catch (clearError) {
-        logger.error("Failed to clear audiobook data:", clearError);
-        // Don't fail the request
-      }
     }
 
     // Write only non-sensitive config to .env for Docker containers.
@@ -342,15 +303,7 @@ router.post("/", async (req, res) => {
       await writeEnvFile({
         LIDARR_ENABLED: data.lidarrEnabled ? "true" : "false",
         LIDARR_URL: data.lidarrUrl || null,
-        AUDIOBOOKSHELF_URL: data.audiobookshelfUrl || null,
         SOULSEEK_USERNAME: data.soulseekUsername || null,
-        // The transcode cache cap is read from config (env) at startup, which is
-        // why the UI flags a restart. Persist it to .env so the saved slider
-        // value actually takes effect on the next boot.
-        TRANSCODE_CACHE_MAX_GB:
-          data.transcodeCacheMaxGb != null
-            ? String(data.transcodeCacheMaxGb)
-            : null,
       });
       logger.debug(".env file synchronized with database settings");
     } catch (envError) {
@@ -685,34 +638,6 @@ router.post("/test-lastfm", async (req, res) => {
     }
   } catch (error) {
     safeError(res, "Last.fm connection test", error);
-  }
-});
-
-// Test Audiobookshelf connection
-router.post("/test-audiobookshelf", async (req, res) => {
-  try {
-    const { url, apiKey } = req.body;
-
-    if (!url || !apiKey) {
-      return res.status(400).json({ error: "URL and API key are required" });
-    }
-
-    const axios = require("axios");
-
-    const response = await axios.get(`${url}/api/libraries`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-      timeout: 5000,
-    });
-
-    res.json({
-      success: true,
-      message: "Audiobookshelf connection successful",
-      libraries: response.data.libraries?.length || 0,
-    });
-  } catch (error) {
-    safeError(res, "Audiobookshelf connection test", error);
   }
 });
 

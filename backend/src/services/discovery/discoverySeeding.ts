@@ -2,8 +2,7 @@
  * Discovery Seeding Module
  *
  * Handles seed artist selection for discovering new music based on:
- * - User's listening history (recent plays)
- * - Library contents (fallback when insufficient history)
+ * - Library contents (random sample of album artists)
  * - Album ownership checking across multiple sources
  */
 
@@ -20,127 +19,54 @@ export interface SeedArtist {
 
 export class DiscoverySeeding {
     private readonly DEFAULT_SEED_COUNT = 10;
-    private readonly MIN_PLAYS_THRESHOLD = 5;
-    private readonly RECENT_PLAYS_LIMIT = 50;
+    // Sample size for the random library selection (keeps the query cheap)
+    private readonly LIBRARY_SAMPLE_SIZE = 100;
 
     /**
-     * Gets seed artists based on user's listening history.
-     * Falls back to library artists when insufficient play history.
-     * Uses recency weighting: plays in last 2 weeks count 2x more.
+     * Gets seed artists from the user's library.
+     * Play history is no longer available, so seeds are a random sample of
+     * library album artists (metadata signal instead of recent plays).
      */
-    async getSeedArtists(userId: string, seedCount?: number): Promise<SeedArtist[]> {
+    async getSeedArtists(_userId: string, seedCount?: number): Promise<SeedArtist[]> {
         const limit = seedCount ?? this.DEFAULT_SEED_COUNT;
-        const twoWeeksAgo = subWeeks(new Date(), 2);
-        const fourWeeksAgo = subWeeks(new Date(), 4);
 
-        // Get plays from last 4 weeks with recency weighting
-        const recentPlays = await prisma.play.groupBy({
-            by: ['trackId'],
-            where: {
-                userId,
-                playedAt: { gte: fourWeeksAgo },
-                source: { in: ['LIBRARY', 'DISCOVERY_KEPT'] },
-            },
-            _count: { id: true },
-            _max: { playedAt: true },
-        });
-
-        // Weight: plays in last 2 weeks count 2x
-        const weightedPlays = recentPlays
-            .map(play => {
-                const isRecent = play._max.playedAt && play._max.playedAt >= twoWeeksAgo;
-                const weight = isRecent ? 2 : 1;
-                return {
-                    trackId: play.trackId,
-                    weightedCount: play._count.id * weight,
-                    rawCount: play._count.id,
-                };
-            })
-            .filter(p => p.rawCount >= this.MIN_PLAYS_THRESHOLD) // Filter <5 plays
-            .sort((a, b) => b.weightedCount - a.weightedCount)
-            .slice(0, this.RECENT_PLAYS_LIMIT);
-
-        if (weightedPlays.length < this.MIN_PLAYS_THRESHOLD) {
-            return this.getFallbackSeedArtists(limit);
+        // ORDER BY random() so the sample pool rotates between runs
+        const sampleIds: { id: string }[] = await prisma.$queryRaw`
+            SELECT "id" FROM "Album" WHERE "location" = 'LIBRARY'
+            ORDER BY random() LIMIT ${this.LIBRARY_SAMPLE_SIZE}
+        `;
+        if (sampleIds.length === 0) {
+            return [];
         }
 
-        const tracks = await prisma.track.findMany({
-            where: {
-                id: { in: weightedPlays.map((p) => p.trackId) },
-                album: { location: 'LIBRARY' },
+        const albums = await prisma.album.findMany({
+            where: { id: { in: sampleIds.map((a) => a.id) } },
+            select: {
+                artist: { select: { id: true, name: true, mbid: true } },
             },
-            include: { album: { include: { artist: true } } },
         });
 
         const artistMap = new Map<string, SeedArtist>();
-        for (const track of tracks) {
-            const artist = track.album.artist;
-            if (!artistMap.has(track.album.artistId)) {
-                if (this.isValidMbid(artist.mbid)) {
-                    artistMap.set(track.album.artistId, {
-                        name: artist.name,
-                        mbid: artist.mbid,
-                    });
-                }
+        for (const album of albums) {
+            const artist = album.artist;
+            if (artist && this.isValidMbid(artist.mbid) && !artistMap.has(artist.id)) {
+                artistMap.set(artist.id, {
+                    name: artist.name,
+                    mbid: artist.mbid,
+                });
             }
         }
 
-        const artists = Array.from(artistMap.values()).slice(0, limit);
-        logger.debug(`[DiscoverySeeding] Found ${artists.length} recency-weighted seed artists`);
-        return artists;
-    }
+        const artists = Array.from(artistMap.values());
+        // Random sample (Fisher-Yates) -- no play history left to rank by
+        for (let i = artists.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [artists[i], artists[j]] = [artists[j], artists[i]];
+        }
 
-    /**
-     * Fallback: Get artists with most engagement (albums + tracks) when play history is insufficient.
-     * More tracks = more listened to = better seed.
-     */
-    private async getFallbackSeedArtists(limit: number): Promise<SeedArtist[]> {
-        logger.debug('[DiscoverySeeding] Insufficient play history, falling back to library');
-
-        // Get artists with their album and track counts
-        const artistsWithCounts = await prisma.artist.findMany({
-            where: {
-                albums: {
-                    some: { location: 'LIBRARY' },
-                },
-            },
-            include: {
-                albums: {
-                    where: { location: 'LIBRARY' },
-                    include: {
-                        _count: {
-                            select: { tracks: true },
-                        },
-                    },
-                },
-            },
-        });
-
-        // Calculate composite score: album count + (track count / 10)
-        // More tracks = more listened to
-        const scored = artistsWithCounts
-            .map(artist => {
-                const albumCount = artist.albums.length;
-                const trackCount = artist.albums.reduce((sum, album) => sum + (album._count?.tracks || 0), 0);
-                const score = albumCount + (trackCount / 10);
-
-                return {
-                    artist,
-                    score,
-                    albumCount,
-                    trackCount,
-                };
-            })
-            .filter(a => this.isValidMbid(a.artist.mbid))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, limit);
-
-        logger.debug(`[DiscoverySeeding] Selected ${scored.length} fallback artists by engagement score`);
-
-        return scored.map(s => ({
-            name: s.artist.name,
-            mbid: s.artist.mbid,
-        }));
+        const selected = artists.slice(0, limit);
+        logger.debug(`[DiscoverySeeding] Selected ${selected.length} random library seed artists`);
+        return selected;
     }
 
     /**

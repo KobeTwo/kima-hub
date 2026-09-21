@@ -55,7 +55,6 @@ export async function writeEnvFile(
         "Last.fm": ["LASTFM_API_KEY", "LASTFM_API_SECRET"],
         "Fanart.tv": ["FANART_API_KEY"],
         OpenAI: ["OPENAI_API_KEY"],
-        Audiobookshelf: ["AUDIOBOOKSHELF_URL", "AUDIOBOOKSHELF_API_KEY"],
         Soulseek: ["SOULSEEK_USERNAME", "SOULSEEK_PASSWORD"],
         "VPN (Mullvad)": [
             "MULLVAD_PRIVATE_KEY",

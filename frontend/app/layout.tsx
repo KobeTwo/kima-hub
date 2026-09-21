@@ -2,11 +2,9 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
-import { FeaturesProvider } from "@/lib/features-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { DownloadProvider } from "@/lib/download-context";
 import { DownloadProgressProvider } from "@/lib/download-progress-context";
-import { ConditionalAudioProvider } from "@/components/providers/ConditionalAudioProvider";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { QueryProvider } from "@/lib/query-client";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
@@ -70,23 +68,19 @@ export default function RootLayout({
                 <GlobalErrorBoundary>
                     <ServiceWorkerRegistration />
                     <AuthProvider>
-                        <FeaturesProvider>
-                            <QueryProvider>
-                                <DownloadProgressProvider>
-                                    <DownloadProvider>
-                                        <ToastProvider>
-                                            <ConditionalAudioProvider>
-                                                <ActivityPanelSettingsProvider>
-                                                    <AuthenticatedLayout>
-                                                        {children}
-                                                    </AuthenticatedLayout>
-                                                </ActivityPanelSettingsProvider>
-                                            </ConditionalAudioProvider>
-                                        </ToastProvider>
-                                    </DownloadProvider>
-                                </DownloadProgressProvider>
-                            </QueryProvider>
-                        </FeaturesProvider>
+                        <QueryProvider>
+                            <DownloadProgressProvider>
+                                <DownloadProvider>
+                                    <ToastProvider>
+                                        <ActivityPanelSettingsProvider>
+                                            <AuthenticatedLayout>
+                                                {children}
+                                            </AuthenticatedLayout>
+                                        </ActivityPanelSettingsProvider>
+                                    </ToastProvider>
+                                </DownloadProvider>
+                            </DownloadProgressProvider>
+                        </QueryProvider>
                     </AuthProvider>
                 </GlobalErrorBoundary>
             </body>

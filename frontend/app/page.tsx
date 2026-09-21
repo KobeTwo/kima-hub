@@ -7,27 +7,20 @@ import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 import { HomeHero } from "@/features/home/components/HomeHero";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
-import { ContinueListening } from "@/features/home/components/ContinueListening";
 import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
 import { MixesGrid } from "@/features/home/components/MixesGrid";
 import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
-import { PodcastsGrid } from "@/features/home/components/PodcastsGrid";
-import { AudiobooksGrid } from "@/features/home/components/AudiobooksGrid";
 import { FeaturedPlaylistsGrid, FeaturedPlaylistsSkeleton } from "@/features/home/components/FeaturedPlaylistsGrid";
-import { LibraryRadioStations } from "@/features/home/components/LibraryRadioStations";
 
 const MoodMixer = lazy(() => import("@/components/MoodMixer").then(mod => ({ default: mod.MoodMixer })));
 
 export default function HomePage() {
     const [showMoodMixer, setShowMoodMixer] = useState(false);
     const {
-        recentlyListened,
         recentlyAdded,
         recommended,
         mixes,
         popularArtists,
-        recentPodcasts,
-        recentAudiobooks,
         featuredPlaylists,
         isLoading,
         isRefreshingMixes,
@@ -51,20 +44,6 @@ export default function HomePage() {
 
                 <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 pb-32 pt-8">
                     <div className="space-y-12">
-                        {/* Library Radio Stations */}
-                        <section>
-                            <SectionHeader title="Library Radio" showAllHref="/radio" color="featured" />
-                            <LibraryRadioStations />
-                        </section>
-
-                        {/* Continue Listening */}
-                        {recentlyListened.length > 0 && (
-                            <section>
-                                <SectionHeader title="Continue Listening" showAllHref="/collection?tab=artists" color="featured" />
-                                <ContinueListening items={recentlyListened} />
-                            </section>
-                        )}
-
                         {/* Recently Added */}
                         {recentlyAdded.length > 0 && (
                             <section>
@@ -138,21 +117,6 @@ export default function HomePage() {
                             </section>
                         )}
 
-                        {/* Popular Podcasts */}
-                        {recentPodcasts.length > 0 && (
-                            <section>
-                                <SectionHeader title="Popular Podcasts" showAllHref="/podcasts" color="podcasts" />
-                                <PodcastsGrid podcasts={recentPodcasts} />
-                            </section>
-                        )}
-
-                        {/* Audiobooks */}
-                        {recentAudiobooks.length > 0 && (
-                            <section>
-                                <SectionHeader title="Audiobooks" showAllHref="/audiobooks" color="audiobooks" />
-                                <AudiobooksGrid audiobooks={recentAudiobooks} />
-                            </section>
-                        )}
                     </div>
                 </div>
             </div>

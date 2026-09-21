@@ -14,9 +14,6 @@ jest.mock('../../utils/db', () => ({
         artist: { findMany: jest.fn() },
         album: { findMany: jest.fn(), count: jest.fn() },
         track: { findMany: jest.fn() },
-        podcast: { findMany: jest.fn() },
-        podcastEpisode: { findMany: jest.fn() },
-        audiobook: { findMany: jest.fn() },
         $queryRaw: jest.fn(),
     },
 }));

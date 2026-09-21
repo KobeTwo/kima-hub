@@ -1,6 +1,6 @@
 /**
  * Regression guard for the dedup-on-failure trap on the artist and track
- * enrichment phases (the same class as the podcast wedge).
+ * enrichment phases.
  *
  * BullMQ keeps a failed job's jobId marker, so a failed enrichment can't be
  * re-queued until the marker is gone. Each automatic phase must clean both
@@ -19,18 +19,10 @@ jest.mock("../enrichmentQueues", () => ({
     artistQueue: { add: mockArtistAdd, clean: mockArtistClean, getJob: mockArtistGetJob, resume: jest.fn() },
     trackQueue: { add: mockTrackAdd, clean: mockTrackClean, getJob: mockTrackGetJob, resume: jest.fn() },
     vibeQueue: { add: jest.fn(), clean: jest.fn(), getJob: jest.fn(), resume: jest.fn() },
-    podcastQueue: { add: jest.fn(), clean: jest.fn(), getJob: jest.fn(), resume: jest.fn() },
     closeEnrichmentQueues: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("../artistEnrichmentWorker", () => ({ startArtistEnrichmentWorker: jest.fn() }));
 jest.mock("../trackEnrichmentWorker", () => ({ startTrackEnrichmentWorker: jest.fn() }));
-jest.mock("../podcastEnrichmentWorker", () => ({ startPodcastEnrichmentWorker: jest.fn() }));
-jest.mock("../audioCompletionSubscriber", () => ({
-    startAudioCompletionSubscriber: jest.fn(),
-    stopAudioCompletionSubscriber: jest.fn().mockResolvedValue(undefined),
-    haltVibeQueuing: jest.fn(),
-    resumeVibeQueuing: jest.fn(),
-}));
 jest.mock("../../services/enrichmentState", () => ({ enrichmentStateService: {} }));
 jest.mock("../../services/enrichmentFailureService", () => ({ enrichmentFailureService: {} }));
 jest.mock("../../services/lastfm", () => ({ lastFmService: {} }));

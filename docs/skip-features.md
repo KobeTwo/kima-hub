@@ -2,6 +2,24 @@
 
 The following features have been removed from this fork. Do not re-add them.
 
+## Playback (removed 2026-07-09)
+
+All audio playback was removed so Kima focuses on downloading, metadata and library
+curation; Navidrome is the player.
+
+Removed:
+- Web audio engine + player UI (components/player/*, lib/audio-*)
+- Subsonic/OpenSubsonic API (backend/src/routes/subsonic/*, /rest/*)
+- Track/album streaming routes (/api/library/tracks/:id/stream, prewarm)
+- Share audio streaming (/api/share/:token/stream/:trackId)
+- Audiobooks + Podcasts features (routes, models, UI pages, Audiobookshelf integration)
+- Play tracking (Play model, /api/plays, playCount badges, top-songs)
+- Playback state sync (cross-device queue restore), listening state
+- Offline album cache (/api/offline)
+- Lyrics panel, Radio page, Queue page, Vibe feature, iOS audio diagnostics
+- Deezer previews are KEPT (artist preview, discover preview, pending-playlist preview)
+- Mixes & discovery keep working on metadata-only signals (no play history)
+
 ## Vibe System (Audio Embeddings)
 
 - **CLAP audio analysis service** — Docker service running LAION CLAP model for audio embedding generation
@@ -11,7 +29,6 @@ The following features have been removed from this fork. Do not re-add them.
 - **Vibe map/Galaxy view UI** — deck.gl 2D/3D visualization of audio embedding space (`VibeSection`, `VibeMap`, `VibeGalaxy`)
 - **Drift feature** — path-finding between two tracks in embedding space
 - **Blend feature** — centroid-based queue generation from multiple tracks
-- **Mood Mixer** — preset-based queue generation from audio analysis
 - **"Keep The Vibe Going"** — continuous similar-track queueing from player
 - **Vibe from track context menu** — similar-track queueing from any track
 - **Find Similar on map** — highlighting similar tracks on the visualization
@@ -43,7 +60,7 @@ The following features have been removed from this fork. Do not re-add them.
 ## Current Discovery Features
 
 - Last.fm artist recommendations
-- Genre-based radio stations
+- Mood Mixer (mood-bucket mixes from audio-analysis mood signals)
 - Era/decade mixes (Your 90s, Your 2000s, etc.)
 - Lidarr integration for new music
 - Playlist import from Spotify/Deezer/YouTube

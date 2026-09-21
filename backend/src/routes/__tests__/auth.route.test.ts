@@ -22,9 +22,6 @@ jest.mock('../../utils/db', () => ({
             update: jest.fn(),
             delete: jest.fn(),
         },
-        userSettings: {
-            create: jest.fn(),
-        },
         apiKey: {
             findUnique: jest.fn(),
             update: jest.fn(),
@@ -300,7 +297,6 @@ describe('Admin-only routes', () => {
             username: 'newuser',
             role: 'user', // server ignores injected 'superadmin'
         });
-        (prisma.userSettings.create as jest.Mock).mockResolvedValue({});
 
         const res = await request(app)
             .post('/auth/create-user')

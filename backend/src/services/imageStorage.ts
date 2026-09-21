@@ -17,7 +17,7 @@ const ALBUM_IMAGES_DIR = "albums";
  * Get the base covers directory path
  */
 function getCoversBasePath(): string {
-    return path.join(config.music.transcodeCachePath, "../covers");
+    return path.join(config.music.cacheDir, "covers");
 }
 
 /**

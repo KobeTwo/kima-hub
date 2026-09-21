@@ -26,15 +26,6 @@ const lidarrConfigSchema = z.object({
     { message: "Invalid url", path: ["url"] },
 );
 
-const audiobookshelfConfigSchema = z.object({
-    url: z.string().optional().or(z.literal("")),
-    apiKey: z.string().optional().or(z.literal("")),
-    enabled: z.boolean(),
-}).refine(
-    (data) => !data.enabled || !data.url || data.url === "" || z.string().url().safeParse(data.url).success,
-    { message: "Invalid url", path: ["url"] },
-);
-
 const soulseekConfigSchema = z.object({
     username: z.string().optional().or(z.literal("")),
     password: z.string().optional().or(z.literal("")),
@@ -131,17 +122,6 @@ router.post("/register", async (req, res) => {
                 passwordHash,
                 role: isFirstUser ? "admin" : "user",
                 onboardingComplete: false,
-            },
-        });
-
-        // Create default user settings with optimal defaults
-        await prisma.userSettings.create({
-            data: {
-                userId: user.id,
-                playbackQuality: "original",
-                wifiOnly: false,
-                offlineEnabled: false,
-                maxCacheSizeMb: 10240, // 10GB
             },
         });
 
@@ -252,84 +232,6 @@ router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
                 .json({ error: "Invalid request", details: err.errors });
         }
         logger.error("Lidarr config error:", err);
-        res.status(500).json({ error: "Failed to save configuration" });
-    }
-});
-
-/**
- * POST /onboarding/audiobookshelf
- * Step 2b: Configure Audiobookshelf integration
- */
-router.post("/audiobookshelf", requireAuth, requireAdmin, async (req, res) => {
-    try {
-        const config = audiobookshelfConfigSchema.parse(req.body);
-
-        // If not enabled, just save as disabled
-        if (!config.enabled) {
-            const settings = await prisma.systemSettings.findFirst();
-            if (settings) {
-                await prisma.systemSettings.update({
-                    where: { id: settings.id },
-                    data: { audiobookshelfEnabled: false },
-                });
-                invalidateSystemSettingsCache();
-            }
-            return res.json({ success: true, tested: false });
-        }
-
-        // Test connection if enabled (non-blocking - save anyway)
-        let connectionTested = false;
-        if (config.url && config.apiKey) {
-            try {
-                const response = await axios.get(`${config.url}/api/me`, {
-                    headers: { Authorization: `Bearer ${config.apiKey}` },
-                    timeout: 5000,
-                });
-
-                if (response.status === 200) {
-                    connectionTested = true;
-                    logger.debug("Audiobookshelf connection test successful");
-                }
-            } catch (error: any) {
-                logger.warn(
-                    "  Audiobookshelf connection test failed (saved anyway):",
-                    error.message
-                );
-                // Don't block - just log the warning
-            }
-        }
-
-        // Save to system settings (even if connection test failed)
-        await prisma.systemSettings.upsert({
-            where: { id: "default" },
-            create: {
-                id: "default",
-                audiobookshelfEnabled: config.enabled,
-                audiobookshelfUrl: config.url || null,
-                audiobookshelfApiKey: encryptField(config.apiKey),
-            },
-            update: {
-                audiobookshelfEnabled: config.enabled,
-                audiobookshelfUrl: config.url || null,
-                audiobookshelfApiKey: encryptField(config.apiKey),
-            },
-        });
-        invalidateSystemSettingsCache();
-
-        res.json({
-            success: true,
-            tested: connectionTested,
-            warning: connectionTested
-                ? null
-                : "Connection test failed but settings saved. You can test again in Settings.",
-        });
-    } catch (err: any) {
-        if (err instanceof z.ZodError) {
-            return res
-                .status(400)
-                .json({ error: "Invalid request", details: err.errors });
-        }
-        logger.error("Audiobookshelf config error:", err);
         res.status(500).json({ error: "Failed to save configuration" });
     }
 });
@@ -468,28 +370,6 @@ router.post("/complete", requireAuth, async (req, res) => {
         } catch (err) {
             logger.warn("[ONBOARDING] Could not reinitialize Lidarr service:", err);
         }
-
-        try {
-            const { audiobookshelfService } = await import("../services/audiobookshelf");
-            audiobookshelfService.reinitialize();
-        } catch (err) {
-            logger.warn("[ONBOARDING] Could not reinitialize Audiobookshelf service:", err);
-        }
-
-        // Fire-and-forget audiobook sync if Audiobookshelf was enabled
-        (async () => {
-            try {
-                const { getSystemSettings } = await import("../utils/systemSettings");
-                const settings = await getSystemSettings();
-                if (settings?.audiobookshelfEnabled) {
-                    const { audiobookCacheService } = await import("../services/audiobookCache");
-                    const result = await audiobookCacheService.syncAll();
-                    logger.info(`[ONBOARDING] Audiobook sync complete: ${result.synced} synced`);
-                }
-            } catch (err) {
-                logger.warn("[ONBOARDING] Post-onboarding audiobook sync failed:", err);
-            }
-        })();
 
         res.json({ success: true });
     } catch (err: any) {

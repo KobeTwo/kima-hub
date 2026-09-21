@@ -13,7 +13,7 @@ import path from "path";
 jest.mock("../../config", () => ({
     config: {
         music: {
-            transcodeCachePath: "/tmp/kima-cover-repair-test/transcode",
+            cacheDir: "/tmp/kima-cover-repair-test",
         },
     },
     USER_AGENT: "Kima/test",

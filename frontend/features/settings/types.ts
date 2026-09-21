@@ -3,13 +3,6 @@
  * Centralized type definitions for the settings feature
  */
 
-export interface UserSettings {
-    playbackQuality: "original" | "high" | "medium" | "low";
-    wifiOnly: boolean;
-    offlineEnabled: boolean;
-    maxCacheSizeMb: number;
-}
-
 export interface SystemSettings {
     // Lidarr
     lidarrEnabled: boolean;
@@ -24,10 +17,6 @@ export interface SystemSettings {
     fanartEnabled: boolean;
     fanartApiKey: string;
     lastfmApiKey: string;
-    // Audiobookshelf
-    audiobookshelfEnabled: boolean;
-    audiobookshelfUrl: string;
-    audiobookshelfApiKey: string;
     // Soulseek (direct connection via slsk-client)
     soulseekUsername: string;
     soulseekPassword: string;
@@ -42,8 +31,6 @@ export interface SystemSettings {
     musicPath: string;
     downloadPath: string;
     // Advanced
-    transcodeCacheMaxGb: number;
-    maxCacheSizeMb: number;
     autoSync: boolean;
     autoEnrichMetadata: boolean;
     audioAnalyzerWorkers: number;

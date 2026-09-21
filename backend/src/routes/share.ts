@@ -4,23 +4,10 @@ import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
 import { randomBytes } from "crypto";
 import rateLimit from "express-rate-limit";
-import path from "path";
 import fs from "fs";
 import { getLocalImagePath, getResizedImagePath } from "../services/imageStorage";
-import { getAudioStreamingService } from "../services/audioStreaming";
-import { config } from "../config";
 
 const router = Router();
-
-const recentPlays = new Map<string, number>();
-const PLAY_DEDUP_MS = 30_000;
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [key, ts] of recentPlays) {
-        if (now - ts > PLAY_DEDUP_MS * 2) recentPlays.delete(key);
-    }
-}, 60_000).unref();
 
 const shareResolveLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -29,29 +16,6 @@ const shareResolveLimiter = rateLimit({
     legacyHeaders: false,
     validate: { trustProxy: false },
 });
-
-const shareStreamLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false },
-});
-
-function getMimeType(filePath: string): string {
-    const ext = path.extname(filePath).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-        ".mp3": "audio/mpeg",
-        ".flac": "audio/flac",
-        ".ogg": "audio/ogg",
-        ".opus": "audio/opus",
-        ".wav": "audio/wav",
-        ".m4a": "audio/mp4",
-        ".aac": "audio/aac",
-        ".wma": "audio/x-ms-wma",
-    };
-    return mimeTypes[ext] || "application/octet-stream";
-}
 
 /**
  * POST /api/share - Create a share link (authenticated)
@@ -161,10 +125,6 @@ router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) =
             return res.status(410).json({ error: "Share link has expired" });
         }
 
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
-
         let entity: any = null;
 
         if (shareLink.entityType === "playlist") {
@@ -256,10 +216,6 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
             return res.status(410).json({ error: "Share link has expired" });
         }
 
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
-
         const coverArtId = decodeURIComponent(req.params.coverArtId);
         const size = req.query.size as string | undefined;
 
@@ -291,113 +247,6 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
     } catch (error: any) {
         logger.error(`[Share] Cover art error: ${error.message}`);
         res.status(500).json({ error: "Failed to serve cover art" });
-    }
-});
-
-/**
- * GET /api/share/:token/stream/:trackId - Stream audio via share token (public, no auth)
- */
-router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, res: Response) => {
-    try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
-
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
-
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
-
-        const trackId = req.params.trackId;
-        let authorized = false;
-
-        if (shareLink.entityType === "track" && shareLink.entityId === trackId) {
-            authorized = true;
-        } else if (shareLink.entityType === "playlist") {
-            const item = await prisma.playlistItem.findFirst({
-                where: { playlistId: shareLink.entityId, trackId },
-            });
-            authorized = !!item;
-        } else if (shareLink.entityType === "album") {
-            const track = await prisma.track.findFirst({
-                where: { id: trackId, albumId: shareLink.entityId },
-            });
-            authorized = !!track;
-        }
-
-        if (!authorized) {
-            return res.status(403).json({ error: "Track not in shared content" });
-        }
-
-        const track = await prisma.track.findUnique({
-            where: { id: trackId },
-            select: { filePath: true },
-        });
-
-        if (!track?.filePath) {
-            return res.status(404).json({ error: "Track file not found" });
-        }
-
-        const musicPath = config.music.musicPath;
-        const resolvedMusicPath = path.resolve(musicPath);
-        const fullPath = path.resolve(resolvedMusicPath, track.filePath);
-
-        if (!fullPath.startsWith(resolvedMusicPath + path.sep)) {
-            return res.status(403).json({ error: "Access denied" });
-        }
-
-        try {
-            await fs.promises.access(fullPath, fs.constants.R_OK);
-        } catch {
-            return res.status(404).json({ error: "Audio file not found" });
-        }
-
-        // Deduplicate play count: only increment once per share+track within time window
-        const playKey = `${shareLink.id}:${trackId}`;
-        const lastPlay = recentPlays.get(playKey);
-        const now = Date.now();
-
-        if (!lastPlay || now - lastPlay > PLAY_DEDUP_MS) {
-            recentPlays.set(playKey, now);
-
-            if (shareLink.maxPlays) {
-                // Atomic check-and-increment: only succeeds if under the limit
-                const updated = await prisma.$executeRaw`
-                    UPDATE "share_links"
-                    SET "playCount" = "playCount" + 1
-                    WHERE "id" = ${shareLink.id}
-                      AND ("maxPlays" IS NULL OR "playCount" < "maxPlays")
-                `;
-                if (updated === 0) {
-                    recentPlays.delete(playKey);
-                    return res.status(410).json({ error: "Share link play limit reached" });
-                }
-            } else {
-                await prisma.shareLink.update({
-                    where: { id: shareLink.id },
-                    data: { playCount: { increment: 1 } },
-                });
-            }
-        }
-
-        const mimeType = getMimeType(track.filePath);
-        const streamingService = getAudioStreamingService(
-            config.music.transcodeCachePath,
-            config.music.transcodeCacheMaxGb,
-        );
-        await streamingService.streamFileWithRangeSupport(req, res, fullPath, mimeType);
-    } catch (error: any) {
-        logger.error(`[Share] Stream error: ${error.message}`);
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Failed to stream audio" });
-        }
     }
 });
 

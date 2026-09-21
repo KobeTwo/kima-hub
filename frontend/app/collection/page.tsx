@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAudioControls } from "@/lib/audio-controls-context";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Tab, DeleteDialogState } from "@/features/library/types";
 import {
@@ -13,7 +12,6 @@ import {
     SortOption,
 } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { useLibraryActions } from "@/features/library/hooks/useLibraryActions";
 import { LibraryHeader } from "@/features/library/components/LibraryHeader";
 import { LibraryTabs } from "@/features/library/components/LibraryTabs";
@@ -33,7 +31,6 @@ function getArtistSortKey(name: string): string {
 export default function LibraryPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { playTracks } = useAudioControls();
 
     // Get active tab from URL params, default to "artists"
     const validTabs: Tab[] = ["artists", "albums", "tracks"];
@@ -194,9 +191,6 @@ export default function LibraryPage() {
     }, [activeTab, queryClient]);
 
     const {
-        playArtist,
-        playAlbum,
-        addTrackToQueue,
         addTrackToPlaylist,
         deleteArtist,
         deleteAlbum,
@@ -247,50 +241,6 @@ export default function LibraryPage() {
         },
         [activeTab, router],
     );
-
-    // Helper to convert library Track to audio context Track format
-    const formatTracksForAudio = useCallback((libraryTracks: typeof tracks) => {
-        return libraryTracks.map((track) => ({
-            id: track.id,
-            title: track.title,
-            duration: track.duration,
-            artist: {
-                id: track.album?.artist?.id,
-                name: track.album?.artist?.name || "Unknown Artist",
-            },
-            album: {
-                id: track.album?.id,
-                title: track.album?.title || "Unknown Album",
-                coverArt: track.album?.coverArt,
-            },
-        }));
-    }, []);
-
-    // Wrapper for playTracks that converts track format
-    const handlePlayTracks = useCallback(
-        (libraryTracks: typeof tracks, startIndex?: number) => {
-            const formattedTracks = formatTracksForAudio(libraryTracks);
-            playTracks(formattedTracks, startIndex);
-        },
-        [formatTracksForAudio, playTracks],
-    );
-
-    // Shuffle entire library - uses server-side shuffle for large libraries
-    const handleShuffleLibrary = useCallback(async () => {
-        try {
-            // Use server-side shuffle endpoint for better performance with large libraries
-            const { tracks: shuffledTracks } = await api.getShuffledTracks(500);
-
-            if (shuffledTracks.length === 0) {
-                return;
-            }
-
-            const formattedTracks = formatTracksForAudio(shuffledTracks);
-            playTracks(formattedTracks, 0);
-        } catch (error) {
-            console.error("Failed to shuffle library:", error);
-        }
-    }, [formatTracksForAudio, playTracks]);
 
     // Handle delete confirmation
     const handleDelete = useCallback(async () => {
@@ -371,7 +321,6 @@ export default function LibraryPage() {
                         onFilterChange={setFilter}
                         onSortChange={setSortBy}
                         onItemsPerPageChange={setItemsPerPage}
-                        onShuffleLibrary={handleShuffleLibrary}
                     />
                 </div>
 
@@ -379,7 +328,6 @@ export default function LibraryPage() {
                     <ArtistsGrid
                         artists={artists}
                         isLoading={isLoading}
-                        onPlay={playArtist}
                         onDelete={handleDeleteArtist}
                     />
                 )}
@@ -388,7 +336,6 @@ export default function LibraryPage() {
                     <AlbumsGrid
                         albums={albums}
                         isLoading={isLoading}
-                        onPlay={playAlbum}
                         onDelete={handleDeleteAlbum}
                     />
                 )}
@@ -397,8 +344,6 @@ export default function LibraryPage() {
                     <TracksList
                         tracks={tracks}
                         isLoading={isLoading}
-                        onPlay={handlePlayTracks}
-                        onAddToQueue={addTrackToQueue}
                         onAddToPlaylist={addTrackToPlaylist}
                         onDelete={handleDeleteTrack}
                     />

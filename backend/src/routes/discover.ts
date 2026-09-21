@@ -735,30 +735,6 @@ router.post("/like", async (req, res) => {
             );
         }
 
-        // Retroactively mark all plays from this album as DISCOVERY_KEPT
-        // Note: This requires getting tracks from the album first
-        const tracks = await prisma.discoveryTrack.findMany({
-            where: { discoveryAlbumId: discoveryAlbum.id },
-            select: { trackId: true },
-        });
-
-        const trackIds = tracks
-            .map((t) => t.trackId)
-            .filter((id): id is string => id !== null);
-
-        if (trackIds.length > 0) {
-            await prisma.play.updateMany({
-                where: {
-                    userId,
-                    trackId: { in: trackIds },
-                    source: "DISCOVERY",
-                },
-                data: {
-                    source: "DISCOVERY_KEPT",
-                },
-            });
-        }
-
         res.json({ success: true });
     } catch (error) {
         logger.error("Like discovery album error:", error);
@@ -804,29 +780,6 @@ router.delete("/unlike", async (req, res) => {
                 source: "discovery_liked",
             },
         });
-
-        // Revert plays back to DISCOVERY source
-        const tracks = await prisma.discoveryTrack.findMany({
-            where: { discoveryAlbumId: discoveryAlbum.id },
-            select: { trackId: true },
-        });
-
-        const trackIds = tracks
-            .map((t) => t.trackId)
-            .filter((id): id is string => id !== null);
-
-        if (trackIds.length > 0) {
-            await prisma.play.updateMany({
-                where: {
-                    userId,
-                    trackId: { in: trackIds },
-                    source: "DISCOVERY_KEPT",
-                },
-                data: {
-                    source: "DISCOVERY",
-                },
-            });
-        }
 
         res.json({ success: true });
     } catch (error) {

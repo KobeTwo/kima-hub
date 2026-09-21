@@ -1519,11 +1519,10 @@ export async function generateDeepCuts(
     _userId: string,
     today: string
 ): Promise<ProgrammaticMix | null> {
+    // No play history: "deep cuts" is now a random sample of the catalog
     const tracks = await prisma.track.findMany({
         where: {
-            plays: {
-                none: {},
-            },
+            album: { location: "LIBRARY" },
         },
         include: {
             album: {
@@ -1536,38 +1535,7 @@ export async function generateDeepCuts(
         take: 200,
     });
 
-    if (tracks.length < 15) {
-        const lowPlayTracks = await prisma.track.findMany({
-            include: {
-                album: { select: { coverUrl: true } },
-                _count: { select: { plays: true } },
-            },
-            take: 200,
-        });
-
-        const filtered = lowPlayTracks
-            .filter((t) => t._count.plays <= 3)
-            .map((t) => ({ ...t, album: t.album }));
-
-        if (filtered.length < 15) return null;
-
-        const shuffled = randomSample(filtered, WEEKLY_TRACK_LIMIT);
-        const coverUrls = shuffled
-            .filter((t) => t.album.coverUrl)
-            .slice(0, 4)
-            .map((t) => t.album.coverUrl!);
-
-        return {
-            id: `deep-cuts-${today}`,
-            type: "deep-cuts",
-            name: "Deep Cuts",
-            description: "Hidden gems waiting to be discovered",
-            trackIds: shuffled.map((t) => t.id),
-            coverUrls,
-            trackCount: shuffled.length,
-            color: getMixColor("rediscover"),
-        };
-    }
+    if (tracks.length < 15) return null;
 
     const shuffled = randomSample(tracks, WEEKLY_TRACK_LIMIT);
     const coverUrls = shuffled

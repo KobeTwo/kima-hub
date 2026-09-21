@@ -4,19 +4,15 @@ import { lidarrService } from '../../lidarr';
 
 jest.mock('../../../utils/db', () => ({
     prisma: {
-        play: {
-            groupBy: jest.fn(),
-        },
+        $queryRaw: jest.fn(),
         album: {
             groupBy: jest.fn(),
+            findMany: jest.fn(),
             findFirst: jest.fn(),
         },
         artist: {
             findMany: jest.fn(),
             findFirst: jest.fn(),
-        },
-        track: {
-            findMany: jest.fn(),
         },
         ownedAlbum: {
             findFirst: jest.fn(),
@@ -53,297 +49,111 @@ describe('DiscoverySeeding', () => {
     describe('getSeedArtists', () => {
         const userId = 'user-123';
 
-        it('should return top played artists with valid MBIDs', async () => {
-            // Need at least 5 plays to not trigger fallback
-            const recentPlays = [
-                { trackId: 'track-1', _count: { id: 10 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-2', _count: { id: 8 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-3', _count: { id: 7 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-4', _count: { id: 6 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-5', _count: { id: 5 }, _max: { playedAt: new Date() } },
-            ];
+        // Helper: build mock album rows for the $queryRaw id sample + album.findMany
+        const albums = (...artists: Array<{ id: string; name: string; mbid: string | null }>) =>
+            artists.map((a, i) => ({ albumId: `album-${i}`, artist: { id: a.id, name: a.name, mbid: a.mbid } }));
 
-            const tracks = [
-                {
-                    id: 'track-1',
-                    album: {
-                        artistId: 'artist-1',
-                        artist: { id: 'artist-1', name: 'Artist One', mbid: 'valid-mbid-1' },
-                    },
-                },
-                {
-                    id: 'track-2',
-                    album: {
-                        artistId: 'artist-2',
-                        artist: { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
-                    },
-                },
-                {
-                    id: 'track-3',
-                    album: {
-                        artistId: 'artist-3',
-                        artist: { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
-                    },
-                },
-                {
-                    id: 'track-4',
-                    album: {
-                        artistId: 'artist-4',
-                        artist: { id: 'artist-4', name: 'Artist Four', mbid: 'valid-mbid-4' },
-                    },
-                },
-                {
-                    id: 'track-5',
-                    album: {
-                        artistId: 'artist-5',
-                        artist: { id: 'artist-5', name: 'Artist Five', mbid: 'valid-mbid-5' },
-                    },
-                },
-            ];
+        // Mock both the random-id sample ($queryRaw) and the album fetch (findMany)
+        const mockSample = (rows: ReturnType<typeof albums>) => {
+            (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue(rows.map((r) => ({ id: r.albumId })));
+            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(rows.map(({ artist }) => ({ artist })));
+        };
 
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(recentPlays);
-            (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(tracks);
+        it('should return seed artists from library albums with valid MBIDs', async () => {
+            const rows = albums(
+                { id: 'artist-1', name: 'Artist One', mbid: 'valid-mbid-1' },
+                { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
+                { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
+            );
+            mockSample(rows);
 
             const result = await seeding.getSeedArtists(userId);
 
-            expect(result).toHaveLength(5);
-            expect(result[0]).toEqual({ name: 'Artist One', mbid: 'valid-mbid-1' });
-            expect(result[1]).toEqual({ name: 'Artist Two', mbid: 'valid-mbid-2' });
+            expect(result).toHaveLength(3);
+            expect(result).toEqual(
+                expect.arrayContaining([
+                    { name: 'Artist One', mbid: 'valid-mbid-1' },
+                    { name: 'Artist Two', mbid: 'valid-mbid-2' },
+                    { name: 'Artist Three', mbid: 'valid-mbid-3' },
+                ])
+            );
+            expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+            expect(mockPrisma.album.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: { in: ['album-0', 'album-1', 'album-2'] } } })
+            );
         });
 
         it('should filter out artists with temp- MBIDs', async () => {
-            // Need at least 5 plays to not trigger fallback
-            const recentPlays = [
-                { trackId: 'track-1', _count: { id: 10 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-2', _count: { id: 8 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-3', _count: { id: 7 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-4', _count: { id: 6 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-5', _count: { id: 5 }, _max: { playedAt: new Date() } },
-            ];
-
-            const tracks = [
-                {
-                    id: 'track-1',
-                    album: {
-                        artistId: 'artist-1',
-                        artist: { id: 'artist-1', name: 'Artist One', mbid: 'temp-12345' },
-                    },
-                },
-                {
-                    id: 'track-2',
-                    album: {
-                        artistId: 'artist-2',
-                        artist: { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
-                    },
-                },
-                {
-                    id: 'track-3',
-                    album: {
-                        artistId: 'artist-3',
-                        artist: { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
-                    },
-                },
-                {
-                    id: 'track-4',
-                    album: {
-                        artistId: 'artist-4',
-                        artist: { id: 'artist-4', name: 'Artist Four', mbid: 'valid-mbid-4' },
-                    },
-                },
-                {
-                    id: 'track-5',
-                    album: {
-                        artistId: 'artist-5',
-                        artist: { id: 'artist-5', name: 'Artist Five', mbid: 'valid-mbid-5' },
-                    },
-                },
-            ];
-
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(recentPlays);
-            (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(tracks);
+            mockSample(albums(
+                { id: 'artist-1', name: 'Artist One', mbid: 'temp-12345' },
+                { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
+                { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
+                { id: 'artist-4', name: 'Artist Four', mbid: 'valid-mbid-4' },
+                { id: 'artist-5', name: 'Artist Five', mbid: 'valid-mbid-5' },
+            ));
 
             const result = await seeding.getSeedArtists(userId);
 
-            // Should have 4 valid artists (artist-1 has temp- MBID)
             expect(result).toHaveLength(4);
             expect(result.find((a) => a.mbid === 'temp-12345')).toBeUndefined();
-            expect(result[0]).toEqual({ name: 'Artist Two', mbid: 'valid-mbid-2' });
         });
 
         it('should filter out artists with null MBIDs', async () => {
-            // Need at least 5 plays to not trigger fallback
-            const recentPlays = [
-                { trackId: 'track-1', _count: { id: 10 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-2', _count: { id: 8 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-3', _count: { id: 7 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-4', _count: { id: 6 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-5', _count: { id: 5 }, _max: { playedAt: new Date() } },
-            ];
-
-            const tracks = [
-                {
-                    id: 'track-1',
-                    album: {
-                        artistId: 'artist-1',
-                        artist: { id: 'artist-1', name: 'Artist One', mbid: null },
-                    },
-                },
-                {
-                    id: 'track-2',
-                    album: {
-                        artistId: 'artist-2',
-                        artist: { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
-                    },
-                },
-                {
-                    id: 'track-3',
-                    album: {
-                        artistId: 'artist-3',
-                        artist: { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
-                    },
-                },
-                {
-                    id: 'track-4',
-                    album: {
-                        artistId: 'artist-4',
-                        artist: { id: 'artist-4', name: 'Artist Four', mbid: 'valid-mbid-4' },
-                    },
-                },
-                {
-                    id: 'track-5',
-                    album: {
-                        artistId: 'artist-5',
-                        artist: { id: 'artist-5', name: 'Artist Five', mbid: 'valid-mbid-5' },
-                    },
-                },
-            ];
-
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(recentPlays);
-            (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(tracks);
+            mockSample(albums(
+                { id: 'artist-1', name: 'Artist One', mbid: null },
+                { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
+                { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
+                { id: 'artist-4', name: 'Artist Four', mbid: 'valid-mbid-4' },
+                { id: 'artist-5', name: 'Artist Five', mbid: 'valid-mbid-5' },
+            ));
 
             const result = await seeding.getSeedArtists(userId);
 
-            // Should have 4 valid artists (artist-1 has null MBID)
             expect(result).toHaveLength(4);
             expect(result.find((a) => a.mbid === null)).toBeUndefined();
-            expect(result[0]).toEqual({ name: 'Artist Two', mbid: 'valid-mbid-2' });
         });
 
-        it('should handle empty listening history by falling back to library', async () => {
-            // getFallbackSeedArtists now uses artist.findMany with included albums
-            const artists = [
-                { id: 'artist-1', name: 'Library Artist One', mbid: 'lib-mbid-1', albums: [{ _count: { tracks: 5 } }] },
-                { id: 'artist-2', name: 'Library Artist Two', mbid: 'lib-mbid-2', albums: [{ _count: { tracks: 3 } }] },
-            ];
-
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue([]);
-            (mockPrisma.artist.findMany as jest.Mock).mockResolvedValue(artists);
+        it('should return an empty array when the library has no albums', async () => {
+            (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue([]);
 
             const result = await seeding.getSeedArtists(userId);
 
-            expect(result).toHaveLength(2);
-            expect(result[0]).toEqual({ name: 'Library Artist One', mbid: 'lib-mbid-1' });
-            expect(mockPrisma.artist.findMany).toHaveBeenCalled();
-        });
-
-        it('should fall back to library when fewer than 5 recent plays', async () => {
-            const recentPlays = [
-                { trackId: 'track-1', _count: { id: 2 }, _max: { playedAt: new Date() } },
-            ];
-
-            // getFallbackSeedArtists uses artist.findMany (not album.groupBy)
-            const artists = [
-                { id: 'artist-1', name: 'Library Artist', mbid: 'lib-mbid-1', albums: [{ _count: { tracks: 5 } }] },
-            ];
-
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(recentPlays);
-            (mockPrisma.artist.findMany as jest.Mock).mockResolvedValue(artists);
-
-            const result = await seeding.getSeedArtists(userId);
-
-            expect(mockPrisma.artist.findMany).toHaveBeenCalled();
-            expect(result[0].name).toBe('Library Artist');
+            expect(result).toEqual([]);
+            expect(mockPrisma.album.findMany).not.toHaveBeenCalled();
         });
 
         it('should respect seedCount parameter', async () => {
-            const recentPlays = Array.from({ length: 20 }, (_, i) => ({
-                trackId: `track-${i}`,
-                _count: { id: 20 - i },
-                _max: { playedAt: new Date() },
+            const artists = Array.from({ length: 20 }, (_, i) => ({
+                id: `artist-${i}`,
+                name: `Artist ${i}`,
+                mbid: `mbid-${i}`,
             }));
-
-            const tracks = Array.from({ length: 20 }, (_, i) => ({
-                id: `track-${i}`,
-                album: {
-                    artistId: `artist-${i}`,
-                    artist: { id: `artist-${i}`, name: `Artist ${i}`, mbid: `mbid-${i}` },
-                },
-            }));
-
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(recentPlays);
-            (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(tracks);
+            mockSample(albums(...artists));
 
             const result = await seeding.getSeedArtists(userId, 5);
 
-            expect(result.length).toBeLessThanOrEqual(5);
+            expect(result).toHaveLength(5);
         });
 
-        it('should deduplicate artists from multiple tracks', async () => {
-            // Need at least 5 plays to not trigger fallback
-            const recentPlays = [
-                { trackId: 'track-1', _count: { id: 10 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-2', _count: { id: 8 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-3', _count: { id: 5 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-4', _count: { id: 5 }, _max: { playedAt: new Date() } },
-                { trackId: 'track-5', _count: { id: 6 }, _max: { playedAt: new Date() } },
-            ];
-
-            const tracks = [
-                {
-                    id: 'track-1',
-                    album: {
-                        artistId: 'artist-1',
-                        artist: { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
-                    },
-                },
-                {
-                    id: 'track-2',
-                    album: {
-                        artistId: 'artist-1',
-                        artist: { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
-                    },
-                },
-                {
-                    id: 'track-3',
-                    album: {
-                        artistId: 'artist-2',
-                        artist: { id: 'artist-2', name: 'Different Artist', mbid: 'valid-mbid-2' },
-                    },
-                },
-                {
-                    id: 'track-4',
-                    album: {
-                        artistId: 'artist-1',
-                        artist: { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
-                    },
-                },
-                {
-                    id: 'track-5',
-                    album: {
-                        artistId: 'artist-3',
-                        artist: { id: 'artist-3', name: 'Third Artist', mbid: 'valid-mbid-3' },
-                    },
-                },
-            ];
-
-            (mockPrisma.play.groupBy as jest.Mock).mockResolvedValue(recentPlays);
-            (mockPrisma.track.findMany as jest.Mock).mockResolvedValue(tracks);
+        it('should deduplicate artists appearing in multiple albums', async () => {
+            mockSample(albums(
+                { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
+                { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
+                { id: 'artist-2', name: 'Different Artist', mbid: 'valid-mbid-2' },
+                { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
+                { id: 'artist-3', name: 'Third Artist', mbid: 'valid-mbid-3' },
+            ));
 
             const result = await seeding.getSeedArtists(userId);
 
-            // Should have 3 unique artists despite 5 tracks (artist-1 appears 3 times)
+            // 3 unique artists despite 5 albums (artist-1 appears 3 times)
             expect(result).toHaveLength(3);
-            expect(result.map((a) => a.name)).toEqual(['Same Artist', 'Different Artist', 'Third Artist']);
+            expect(result.map((a) => a.name).sort()).toEqual([
+                'Different Artist',
+                'Same Artist',
+                'Third Artist',
+            ]);
         });
     });
 

@@ -4,9 +4,9 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Chevron7Locked/kima-hub?label=Release)](https://github.com/Chevron7Locked/kima-hub/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-A self-hosted, on-demand audio streaming platform that brings the Spotify experience to your personal music library.
+A self-hosted music library manager that brings curation, discovery, and download power to your personal music collection.
 
-Kima is built for music lovers who want the convenience of streaming services without sacrificing ownership of their library. Point it at your music collection, and Kima handles the rest: artist discovery, personalized playlists, podcast subscriptions, and seamless integration with tools you already use like Lidarr and Audiobookshelf.
+Kima is built for music lovers who want to own their library. Point it at your music collection, and Kima handles the rest: artist discovery, personalized playlists, and seamless integration with tools you already use like Lidarr. Kima focuses on downloading, metadata, and library curation — for playing your music, pair it with your favorite player (e.g. Navidrome).
 
 ![Kima Home Screen](assets/screenshots/desktop-home.png)
 
@@ -23,7 +23,7 @@ Thanks for your patience while I work through this.
 ## Table of Contents
 
 -   [Features](#features)
-    -   [The Vibe System](#the-vibe-system)
+    -   [Mood Mixer](#mood-mixer)
     -   [Playlist Import](#playlist-import)
 -   [Mobile Support](#mobile-support)
 -   [Quick Start](#quick-start)
@@ -31,9 +31,8 @@ Thanks for your patience while I work through this.
 -   [CLAP Audio Analysis](#clap-audio-analysis)
 -   [GPU Acceleration](#gpu-acceleration)
 -   [Integrations](#integrations)
-    -   [Native Apps (Subsonic)](#native-apps-subsonic)
 -   [Using Kima](#using-kima)
-    -   [Using the Vibe System](#using-the-vibe-system)
+    -   [Mood Mixer](#mood-mixer-1)
 -   [Administration](#administration)
 -   [Architecture](#architecture)
 -   [Roadmap](#roadmap)
@@ -46,10 +45,8 @@ Thanks for your patience while I work through this.
 
 ### Your Music, Your Way
 
--   **Stream your library** - FLAC, MP3, AAC, OGG, and other common formats work out of the box
+-   **Downloads** - Acquire new music through Lidarr or Soulseek; Kima handles the download, import, and enrichment end to end
 -   **Automatic cataloging** - Kima scans your library and enriches it with metadata from MusicBrainz and Last.fm, including ISRC codes and genre tags
--   **Audio transcoding** - Stream at original quality or transcode on-the-fly (320kbps, 192kbps, or 128kbps)
--   **Lyrics** - Displays embedded lyrics or fetches them automatically from LRCLIB. Timed lyrics get line-by-line sync during playback; untimed lyrics display as static text. Coverage is good for major artists but varies for niche or independent music\*
 -   **Ultra-wide support** - Library grid scales up to 8 columns on large displays
 
 <p align="center">
@@ -64,77 +61,15 @@ Thanks for your patience while I work through this.
     -   Top tracks
     -   Rediscover forgotten favorites
     -   Similar artist recommendations
--   **Library Radio Stations** - One-click radio modes for instant listening:
-    -   Shuffle All (your entire library)
-    -   Workout (high energy tracks)
-    -   Discovery (lesser-played gems)
-    -   Favorites (most played)
-    -   Dynamic genre and decade stations generated from your library
--   **Discover Weekly** - Weekly playlists of new music tailored to your listening habits (requires Lidarr)
+-   **Discover Weekly** - Weekly playlists of new music, auto-downloaded through Lidarr
 -   **Artist recommendations** - Find similar artists based on what you already love
 -   **Artist name resolution** - Smart alias lookup via Last.fm (e.g., "of mice" → "Of Mice & Men")
 -   **Discography sorting** - Sort artist albums by year or date added
 -   **Deezer previews** - Preview tracks you don't own before adding them to your library
--   **Vibe matching** - Find tracks that match your current mood (see [The Vibe System](#the-vibe-system))
 
-### Podcasts
+### Mood Mixer
 
--   **Subscribe via RSS** - Search iTunes for podcasts and subscribe directly
--   **Track progress** - Pick up where you left off across devices
--   **Episode management** - Browse episodes, mark as played, and manage your subscriptions
--   **Mobile skip buttons** - Jump ±30 seconds on mobile for easy navigation
-
-<p align="center">
-  <img src="assets/screenshots/desktop-podcasts.png" alt="Podcasts" width="800">
-</p>
-
-### Audiobooks
-
--   **Audiobookshelf integration** - Connect your existing Audiobookshelf instance
--   **Unified experience** - Browse and listen to audiobooks alongside your music
--   **Progress sync** - Your listening position syncs with Audiobookshelf
--   **Mobile skip buttons** - Jump ±30 seconds on mobile for easy chapter navigation
-
-<p align="center">
-  <img src="assets/screenshots/desktop-audiobooks.png" alt="Audiobooks" width="800">
-</p>
-
-### The Vibe System
-
-The centerpiece of music discovery in Kima. Your entire library is analyzed by a CLAP neural network and projected into a 2D/3D space where similar-sounding tracks cluster together. The result is a living map of your music collection you can explore, search, and navigate.
-
-**Music Map** -- the default 2D view. Every track in your library is a point on the map, colored by mood cluster. Zoom and pan to explore. Click any track to inspect it; double-click to play it immediately.
-
-<p align="center">
-  <img src="assets/screenshots/vibe-map.png" alt="Vibe Music Map" width="800">
-</p>
-
-**Galaxy View** -- the same data rendered as a 3D star field. Orbit, zoom, and fly through your library. Switch between Map and Galaxy with the toggle in the top-left corner.
-
-<p align="center">
-  <img src="assets/screenshots/vibe-galaxy.png" alt="Vibe Galaxy" width="800">
-</p>
-
-**Drift** -- pick any two tracks as start and end points and Kima plots a smooth path through the audio space between them. The resulting queue travels gradually from one sonic neighborhood to the other.
-
-<p align="center">
-  <img src="assets/screenshots/vibe-drift.png" alt="Vibe Drift -- Song Path" width="800">
-</p>
-
-**Blend** -- add multiple tracks and let Kima find the centroid in audio space. The result is a queue of tracks that blend all of the inputs together into something new.
-
-<p align="center">
-  <img src="assets/screenshots/vibe-blend.png" alt="Vibe Blend" width="800">
-</p>
-
-**Additional features:**
-
--   **Text search** - Type any descriptor ("loud and fast", "rainy day piano") to highlight matching tracks on the map
--   **Right-click context menu** - Vibe from any track (similar-track queue), find similar (highlight on map), or start a Drift
--   **Labels** - Toggle track/artist labels on the map
--   **Keep The Vibe Going** - From the player, activate vibe mode to continuously queue tracks that match what's playing
-
-**Mood Mixer** -- pick a mood preset (Happy, Energetic, Chill, Focus, Party, Acoustic, Melancholy, Sad, Aggressive) to instantly generate a playlist calibrated to that sound. Moods are derived from audio analysis of your actual library, not genre tags.
+Pick a mood preset (Happy, Energetic, Chill, Focus, Party, Acoustic, Melancholic, Sad, Aggressive) to instantly generate a playlist calibrated to that sound. Moods are derived from audio analysis of your actual library (mood buckets), not genre tags. Each preset shows how many tracks in your library match that mood.
 
 <p align="center">
   <img src="assets/screenshots/mood-mixer.png" alt="Mood Mixer" width="800">
@@ -159,17 +94,9 @@ Import playlists from Spotify, Deezer, and YouTube, or browse and discover new m
   <img src="assets/screenshots/spotify-import-preview.png" alt="Import Preview" width="800">
 </p>
 
-### Native Apps
-
--   **OpenSubsonic API** - Use any Subsonic-compatible client (Symfonium, DSub, Ultrasonic, etc.) to stream your Kima library
--   **Standard Subsonic auth** - MD5 token auth supported; enter your API token as the password -- works with Amperfy, Symfonium, DSub, and any standard Subsonic client
--   **Per-client tokens** - Generate named API tokens in Settings > Native Apps; revoke them individually when a device is lost or replaced
--   **Enrichment-aware** - Genres and artist biographies exposed to clients come from Last.fm enrichment, not just file tags
--   **Lyrics, bookmarks, and play queue** - getLyrics, bookmarks, and savePlayQueue/getPlayQueue for cross-device resume
-
 ### Multi-User Support
 
--   **Separate accounts** - Each user gets their own playlists, listening history, and preferences
+-   **Separate accounts** - Each user gets their own playlists, mixes, and preferences
 -   **Admin controls** - Manage users and system settings from the web interface
 -   **Two-factor authentication** - Secure accounts with TOTP-based 2FA
 
@@ -187,7 +114,6 @@ Import playlists from Spotify, Deezer, and YouTube, or browse and discover new m
 
 <p align="center">
   <img src="assets/screenshots/mobile-home.png" alt="Mobile Home" width="280">
-  <img src="assets/screenshots/mobile-player.png" alt="Mobile Player" width="280">
   <img src="assets/screenshots/mobile-library.png" alt="Mobile Library" width="280">
 </p>
 
@@ -213,9 +139,6 @@ Kima works as a PWA on mobile devices, giving you a native app-like experience w
 
 **PWA Features:**
 
--   Full streaming functionality
--   Background audio playback
--   Lock screen and notification media controls (iOS Control Center and Android notifications)
 -   Offline caching for faster loads
 -   Installable icon on home screen
 
@@ -225,8 +148,7 @@ Kima includes a dedicated interface optimized for television displays:
 
 -   Large artwork and readable text from across the room
 -   Full D-pad and remote navigation support
--   Persistent Now Playing bar for quick access to playback controls
--   Simplified navigation focused on browsing and playback
+-   Simplified navigation focused on browsing and curation
 
 The TV interface is automatically enabled when accessing Kima from an Android TV device's browser.
 
@@ -471,7 +393,7 @@ openssl rand -base64 32
 
 ## CLAP Audio Analysis
 
-The CLAP (Contrastive Language-Audio Pretraining) service generates embeddings for audio similarity search, powering the Vibe button's track matching feature.
+The CLAP (Contrastive Language-Audio Pretraining) service generates audio similarity embeddings as part of the enrichment pipeline. The embeddings power audio-based signals such as mood bucket assignment (used by the Mood Mixer).
 
 ### Requirements
 
@@ -491,21 +413,13 @@ Environment variables in docker-compose.yml:
 
 ### Usage
 
-The CLAP analyzer runs automatically alongside the main audio analyzer. The vibe button uses CLAP embeddings for finding similar tracks. Text-based vibe search is available at `/api/vibe/search`.
-
-### API Endpoints
-
-| Endpoint                       | Method | Description                                |
-| ------------------------------ | ------ | ------------------------------------------ |
-| `/api/vibe/similar/:trackId`   | GET    | Get tracks similar to the given track      |
-| `/api/vibe/search`             | POST   | Search tracks by text description          |
-| `/api/vibe/status`             | GET    | Get embedding progress                     |
+The CLAP analyzer runs automatically alongside the main audio analyzer. Embeddings are generated during the enrichment pipeline and power audio-based signals such as mood bucket assignment.
 
 ---
 
 ## GPU Acceleration
 
-GPU acceleration speeds up audio analysis (mood detection, BPM extraction, vibe embeddings). It is **optional** -- everything works on CPU, just slower.
+GPU acceleration speeds up audio analysis (mood detection, BPM extraction, similarity embeddings). It is **optional** -- everything works on CPU, just slower.
 
 ### Requirements
 
@@ -613,24 +527,6 @@ environment:
 
 Use the IP address that Lidarr can reach. If both containers are on the same Docker network, use Kima's container IP.
 
-### Audiobookshelf
-
-Connect to your Audiobookshelf instance to browse and listen to audiobooks within Kima.
-
-**What you get:**
-
--   Browse your audiobook library
--   Stream audiobooks directly in Kima
--   Progress syncs between Kima and Audiobookshelf
-
-**Setup:**
-
-1. Go to Settings in Kima
-2. Navigate to the Audiobookshelf section
-3. Enter your Audiobookshelf URL (e.g., `http://localhost:13378`)
-4. Enter your API key (found in Audiobookshelf under Settings > Users > your user > API Token)
-5. Test the connection and save
-
 ### Soulseek
 
 Kima includes built-in Soulseek support for finding rare tracks and one-offs that aren't available through traditional download sources like Lidarr.
@@ -667,52 +563,9 @@ You can also configure Soulseek as a download source for playlist imports. In Se
 - Some users may have slow connections or go offline during transfers
 - Kima retries with alternative users if a download fails or times out
 
-### Native Apps (Subsonic)
+### API Tokens
 
-Kima implements the [OpenSubsonic](https://opensubsonic.netlify.app/) REST API, making it compatible with any Subsonic client.
-
-**Tested clients:** Amperfy (iOS), Symfonium, DSub, Ultrasonic
-
-**Setup:**
-
-1. Go to Settings > Native Apps in Kima
-2. Enter a client name (e.g. "Amperfy on iPhone") and click **Generate Token**
-3. Copy and save the token -- it is only shown once
-4. In your client app, configure:
-   - **Server URL** -- your Kima server address (e.g. `http://192.168.1.10:3030`)
-   - **Username** -- your Kima username
-   - **Password** -- the token you just generated
-
-**Notes:**
-
-- Standard MD5 token auth is supported -- clients that hash their password automatically will work correctly when you enter an API token as the password
-- Each client should have its own token so you can revoke access per device
-- Genres and biographies surfaced to clients come from Last.fm enrichment, not just file tags
-- DISCOVER-location albums are excluded from all library views
-- OpenSubsonic extensions exposed: `apiKeyAuthentication`, `songLyrics`, `indexBasedQueue`, and `getPodcastEpisode`
-- Additional OpenSubsonic endpoints supported: `tokenInfo`, `startScan`, `getScanStatus`, `search`, `search2`, `search3`, `getUser`, `getUsers`, `createUser`, `updateUser`, `deleteUser`, `changePassword`, `getPlaylists`, `getPlaylist`, `createPlaylist`, `updatePlaylist`, `deletePlaylist`, `setRating`, `getPlayQueue`, `getPlayQueueByIndex`, `savePlayQueue`, `savePlayQueueByIndex`, `getBookmarks`, `createBookmark`, `deleteBookmark`, `getInternetRadioStations`, `createInternetRadioStation`, `updateInternetRadioStation`, `deleteInternetRadioStation`, `getAvatar`, `getShares`, `createShare`, `updateShare`, `deleteShare`, `getChatMessages`, `addChatMessage`, `getVideos`, `getVideoInfo`, `getCaptions`, `jukeboxControl`, `getTranscodeDecision`, `getTranscodeStream`, `hls`, `getLyricsBySongId`, `getLyrics`, `getNowPlaying`, `getTopSongs`, `getSongsByGenre`, `getSimilarSongs`, `getSimilarSongs2`, `getMusicDirectory`, `getPodcasts`, `getNewestPodcasts`, `getPodcastEpisode`, `refreshPodcasts`
-
-**Subsonic route module layout (backend):**
-
-- `backend/src/routes/subsonic/index.ts` -- top-level router composition, auth/rate-limit, system endpoints
-- `library.ts` -- artists/albums/tracks browsing and directory traversal
-- `search.ts` -- `search`/`search2`/`search3`, genre/top/similar discovery
-- `playback.ts` -- stream/download/cover-art/scrobble/now-playing plus `hls`/`getTranscodeStream`
-- `playlists.ts` -- playlist list/read/create/update/delete
-- `queue.ts` -- play queue get/save (ID-based and index-based)
-- `starred.ts` -- star/unstar, starred lists, `setRating`
-- `artistInfo.ts` / `lyrics.ts` -- artist metadata and lyric endpoints
-- `userManagement.ts` / `profile.ts` -- user admin endpoints and `getUser`
-- `podcasts.ts` -- podcast subscription and episode endpoints
-- `compat.ts` -- compatibility/stub endpoints for clients that expect optional APIs
-
-**When adding a Subsonic endpoint:**
-
-1. Add the handler in the module that matches endpoint ownership (or create a new focused module if needed).
-2. Validate required query params and return Subsonic-compatible errors via `subsonicError`.
-3. Return response payloads through `subsonicOk` using existing mapper helpers where possible.
-4. Register the router in `backend/src/routes/subsonic/index.ts` (preserve catch-all behavior).
-5. Update the endpoint support list in this README and run diagnostics on touched Subsonic route files.
+The OpenSubsonic API was removed from this fork (audio playback was removed entirely — see `docs/skip-features.md`). You can still generate API tokens under **Settings > Native Apps** for programmatic access to the Kima REST API; each token is named, can be revoked individually, and is used as a `Bearer` credential.
 
 ---
 
@@ -723,20 +576,18 @@ Kima implements the [OpenSubsonic](https://opensubsonic.netlify.app/) REST API, 
 When you first access Kima, you'll be guided through a setup wizard:
 
 1. **Create your account** - The first user becomes the administrator
-2. **Configure integrations** - Optionally connect Lidarr, Audiobookshelf, and other services
+2. **Configure integrations** - Optionally connect Lidarr, Soulseek, and other services
 3. **Wait for library scan** - Kima will scan and catalog your music collection
 
 ### The Home Screen
 
 After setup, your home screen displays:
 
--   **Continue Listening** - Pick up where you left off
 -   **Recently Added** - New additions to your library
--   **Library Radio Stations** - One-click radio modes (Shuffle All, Workout, Discovery, Favorites, plus genre and decade stations)
--   **Made For You** - Auto-generated mixes based on your library
--   **Recommended For You** - Artist recommendations from Last.fm
--   **Popular Podcasts** - Trending podcasts you might enjoy
--   **Audiobooks** - Quick access to your audiobook library (if Audiobookshelf is connected)
+-   **Made For You** - Auto-generated mixes based on your library (with the Mood Mixer button)
+-   **Recommended** - Artist recommendations from Last.fm
+-   **Popular Artists** - Trending artists on Last.fm
+-   **Featured Playlists** - Curated Deezer playlists
 
 ### Searching
 
@@ -744,11 +595,10 @@ Kima offers two search modes:
 
 **Library Search** - Find artists, albums, and tracks in your collection. Results are instant and searchable by name.
 
-**Discovery Search** - Find new music and podcasts you don't own. Powered by Last.fm for music and iTunes for podcasts. From discovery results, you can:
+**Discovery Search** - Find new music you don't own. Powered by Last.fm. From discovery results, you can:
 
 -   Preview tracks via Deezer
 -   Request downloads through Lidarr
--   Subscribe to podcasts
 
 <p align="center">
   <img src="assets/screenshots/desktop-artist.png" alt="Artist Page" width="800">
@@ -756,15 +606,6 @@ Kima offers two search modes:
 <p align="center">
   <img src="assets/screenshots/desktop-album.png" alt="Album Page" width="800">
 </p>
-
-### Managing Podcasts
-
-1. Use the search bar and select "Podcasts" to find shows
-2. Click on a podcast to see its details and recent episodes
-3. Click Subscribe to add it to your library
-4. Episodes stream directly from the RSS feed - no downloads required
-
-Your listening progress is saved automatically, so you can pause on one device and resume on another.
 
 ### Creating Playlists
 
@@ -774,38 +615,12 @@ Your listening progress is saved automatically, so you can pause on one device a
 4. Reorder tracks by dragging and dropping
 5. Toggle "Public" to share with other users on your instance
 
-### Using the Vibe System
-
-**Exploring the map:**
-
-1. Navigate to **Vibe** in the sidebar
-2. Your library loads as a 2D music map -- similar-sounding tracks cluster together
-3. Click any point to inspect the track; double-click to play it
-4. Switch to **Galaxy** view for a 3D star-field perspective
-5. Use the **Search** bar to highlight tracks matching a text description
-
-**Drift -- journey between two tracks:**
-
-1. Click **Drift** in the toolbar
-2. Search for and select a start track, then an end track
-3. Click **Generate Path** -- Kima queues a smooth sonic journey between them
-
-**Blend -- find the space between multiple tracks:**
-
-1. Click **Blend** in the toolbar
-2. Add tracks you want to blend together
-3. Kima finds the centroid in audio space and queues tracks from that neighborhood
-
-**Keep The Vibe Going (from the player):**
-
-1. Start playing any track
-2. Right-click it on the vibe map and select **Vibe** to queue similar tracks continuously
-
-**Mood Mixer:**
+### Mood Mixer
 
 1. On the home screen, click **Mood Mixer** next to the Made For You section
 2. Select a mood preset -- Kima instantly generates a playlist from your library calibrated to that mood
 3. Each preset count shows how many tracks in your library match that mood
+4. Generated mixes are saved automatically, so you can open and manage them like any other playlist
 
 ### Importing Playlists
 
@@ -830,35 +645,15 @@ Your listening progress is saved automatically, so you can pause on one device a
 3. Kima extracts individual tracks and resolves them via song.link to identify each one
 4. The same preview and import flow applies
 
-### Playback Settings
+### Settings
 
-In Settings, you can configure:
+In Settings you can configure integrations (Lidarr, Soulseek), download behavior, library enrichment/cache options, user management, and API tokens.
 
--   **Playback Quality** - Choose between Original, High (320kbps), Medium (192kbps), or Low (128kbps)
--   **Cache Size** - Limit how much space transcoded files use
+**Navidrome Sync** - Mirror Kima playlists to your Navidrome instance so they play in any Subsonic-compatible client. Sync runs after imports, scans, and manual playlist edits (within a minute of changes).
 
-<p align="center">
-  <img src="assets/screenshots/desktop-player.png" alt="Now Playing" width="800">
-</p>
 <p align="center">
   <img src="assets/screenshots/desktop-settings.png" alt="Settings" width="800">
 </p>
-
-### Keyboard Shortcuts
-
-When using the web interface, these keyboard shortcuts are available during playback:
-
-| Key         | Action                   |
-| ----------- | ------------------------ |
-| Space       | Play / Pause             |
-| N           | Next track               |
-| P           | Previous track           |
-| S           | Toggle shuffle           |
-| M           | Toggle mute              |
-| Arrow Up    | Volume up                |
-| Arrow Down  | Volume down              |
-| Arrow Right | Seek forward 10 seconds  |
-| Arrow Left  | Seek backward 10 seconds |
 
 ### Android TV
 
@@ -866,8 +661,7 @@ Kima includes a dedicated interface optimized for television displays:
 
 -   Large artwork and readable text from across the room
 -   Full D-pad and remote navigation support
--   Persistent Now Playing bar for quick access to playback controls
--   Simplified navigation focused on browsing and playback
+-   Simplified navigation focused on browsing and curation
 
 The TV interface is automatically enabled when accessing Kima from an Android TV device. Access it through your TV's web browser.
 
@@ -888,7 +682,7 @@ As an administrator, you can:
 
 Administrators have access to additional settings:
 
--   **Lidarr/Audiobookshelf/Soulseek** - Configure integrations
+-   **Lidarr/Soulseek** - Configure integrations
 -   **Storage Paths** - View configured paths
 -   **Cache Management** - Clear caches if needed
 -   **Advanced** - Download retry settings, concurrent download limits
@@ -960,16 +754,16 @@ Kima consists of several components working together:
 │    Lidarr       │◄────────────►│      Backend        │
 │   (Optional)    │              │  (Express.js :3006) │
 └─────────────────┘              └──────────┬──────────┘
-                                            │
-┌─────────────────┐              ┌──────────┴──────────┐
-│ Audiobookshelf  │◄────────────►│                     │
-│   (Optional)    │              │  ┌───────────────┐  │
-└─────────────────┘              │  │  PostgreSQL   │  │
-                                 │  └───────────────┘  │
-                                 │  ┌───────────────┐  │
-                                 │  │     Redis     │  │
-                                 │  └───────────────┘  │
-                                 └─────────────────────┘
+                                             │
+                                             ▼
+                                  ┌─────────────────────┐
+                                  │  ┌───────────────┐  │
+                                  │  │  PostgreSQL   │  │
+                                  │  └───────────────┘  │
+                                  │  ┌───────────────┐  │
+                                  │  │     Redis     │  │
+                                  │  └───────────────┘  │
+                                  └─────────────────────┘
 ```
 
 | Component           | Purpose                                    | Default Port |
@@ -979,7 +773,7 @@ Kima consists of several components working together:
 | PostgreSQL          | Database (with pgvector)                   | 5432         |
 | Redis               | Caching and job queues                     | 6379         |
 | Audio Analyzer      | Mood, BPM, key detection (Essentia MusiCNN)| --           |
-| Audio Analyzer CLAP | Vibe similarity embeddings (LAION CLAP)    | --           |
+| Audio Analyzer CLAP | Audio similarity embeddings (LAION CLAP)   | --           |
 
 ---
 
@@ -988,7 +782,7 @@ Kima consists of several components working together:
 Kima is under active development. Here's what's planned:
 
 -   **Native Mobile App** - React Native application for iOS and Android
--   **Offline Mode** - Download tracks for offline playback
+-   **Offline Mode** - Download tracks/albums for offline use in your player
 -   **Windows Executable** - Standalone app for Windows users who prefer not to use Docker
 
 Contributions and suggestions are welcome.
@@ -1009,12 +803,10 @@ Kima wouldn't be possible without these services and projects:
 
 -   [Last.fm](https://www.last.fm/) - Artist recommendations and music metadata
 -   [MusicBrainz](https://musicbrainz.org/) - Comprehensive music database
--   [iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/) - Podcast discovery
 -   [Deezer](https://developers.deezer.com/) - Track previews and playlist browsing
 -   [Odesli/song.link](https://odesli.co/) - Cross-platform music link resolution
 -   [Fanart.tv](https://fanart.tv/) - Artist images and artwork
 -   [Lidarr](https://lidarr.audio/) - Music collection management
--   [Audiobookshelf](https://www.audiobookshelf.org/) - Audiobook and podcast server
 
 ---
 

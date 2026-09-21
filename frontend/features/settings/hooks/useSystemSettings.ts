@@ -13,9 +13,6 @@ const defaultSystemSettings: SystemSettings = {
     fanartEnabled: false,
     fanartApiKey: "",
     lastfmApiKey: "",
-    audiobookshelfEnabled: false,
-    audiobookshelfUrl: "http://localhost:13378",
-    audiobookshelfApiKey: "",
     soulseekUsername: "",
     soulseekPassword: "",
     soulseekMode: "p2p",
@@ -25,8 +22,6 @@ const defaultSystemSettings: SystemSettings = {
     spotifyClientSecret: "",
     musicPath: "/music",
     downloadPath: "/downloads",
-    transcodeCacheMaxGb: 10,
-    maxCacheSizeMb: 10240,
     autoSync: true,
     autoEnrichMetadata: true,
     audioAnalyzerWorkers: 2,
@@ -65,10 +60,7 @@ export function useSystemSettings() {
     const loadSystemSettings = async () => {
         try {
             setIsLoading(true);
-            const [sysData, userData] = await Promise.all([
-                api.getSystemSettings(),
-                api.getSettings(),
-            ]);
+            const sysData = await api.getSystemSettings();
 
             // Sanitize null values to empty strings for controlled inputs
             const sanitizeSettings = (settings: Record<string, unknown>): SystemSettings => {
@@ -85,12 +77,7 @@ export function useSystemSettings() {
                 return sanitized as unknown as SystemSettings;
             };
 
-            const combinedSettings = {
-                ...sanitizeSettings(sysData),
-                maxCacheSizeMb: userData.maxCacheSizeMb,
-            };
-
-            setSystemSettings(combinedSettings);
+            setSystemSettings(sanitizeSettings(sysData));
         } catch (error) {
             console.error("Failed to load system settings:", error);
             // No toast - error will be visible in the UI if settings fail to load
@@ -103,9 +90,6 @@ export function useSystemSettings() {
         try {
             setIsSaving(true);
             await api.updateSystemSettings(settingsToSave);
-            await api.updateSettings({
-                maxCacheSizeMb: settingsToSave.maxCacheSizeMb,
-            });
         } catch (error) {
             console.error("Failed to save system settings:", error);
             throw error;
@@ -144,12 +128,6 @@ export function useSystemSettings() {
                     break;
                 case "lastfm":
                     result = await api.testLastfm(systemSettings.lastfmApiKey);
-                    break;
-                case "audiobookshelf":
-                    result = await api.testAudiobookshelf(
-                        systemSettings.audiobookshelfUrl,
-                        systemSettings.audiobookshelfApiKey
-                    );
                     break;
                 case "soulseek":
                     result = await api.testSoulseek(
