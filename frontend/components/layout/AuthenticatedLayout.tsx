@@ -7,11 +7,7 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { TVLayout } from "./TVLayout";
 import { BottomNavigation } from "./BottomNavigation";
-import { UniversalPlayer } from "../player/UniversalPlayer";
-import { MediaControlsHandler } from "../player/MediaControlsHandler";
-import { PlayerModeWrapper } from "../player/PlayerModeWrapper";
 import { ActivityPanel } from "./ActivityPanel";
-import { UnifiedPanel } from "./UnifiedPanel";
 import { GalaxyBackground } from "../ui/GalaxyBackground";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { ReactNode } from "react";
@@ -88,23 +84,22 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         // Android TV Layout - Optimized for 10-foot UI
         if (isTV) {
             return (
-                <PlayerModeWrapper>
+                <>
                     <a
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                         Skip to main content
                     </a>
-                    <MediaControlsHandler />
                     <TVLayout>{children}</TVLayout>
-                </PlayerModeWrapper>
+                </>
             );
         }
 
         // Mobile/Tablet Layout
         if (isMobileOrTablet) {
             return (
-                <PlayerModeWrapper>
+                <>
                     <a
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -112,7 +107,6 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         Skip to main content
                     </a>
                     <div className="h-screen bg-black overflow-hidden flex flex-col">
-                        <MediaControlsHandler />
                         <TopBar />
 
                         {/* Sidebar - renders MobileSidebar for hamburger menu */}
@@ -140,19 +134,16 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             <div className="h-full">{children}</div>
                         </main>
 
-                        {/* Mini Player - fixed, positioned above bottom nav */}
-                        <UniversalPlayer />
-
                         {/* Bottom Navigation - fixed at bottom */}
                         <BottomNavigation />
                     </div>
-                </PlayerModeWrapper>
+                </>
             );
         }
 
         // Desktop Layout
         return (
-            <PlayerModeWrapper>
+            <>
                 <a
                     href="#main-content"
                     className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -163,7 +154,6 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     className="h-screen bg-black overflow-hidden flex flex-col"
                     style={{ paddingTop: "calc(64px + var(--titlebar-height, 0px))" }}
                 >
-                    <MediaControlsHandler />
                     <TopBar />
                     <div className="flex-1 flex gap-2 p-2 pt-0 overflow-hidden">
                         <Sidebar />
@@ -175,14 +165,9 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             <GalaxyBackground />
                             {children}
                         </main>
-                        <UnifiedPanel
-                            isOpen={activityPanel.isOpen}
-                            onToggle={activityPanel.toggle}
-                        />
                     </div>
-                    <UniversalPlayer />
                 </div>
-            </PlayerModeWrapper>
+            </>
         );
     }
 

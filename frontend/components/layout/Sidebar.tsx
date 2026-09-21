@@ -9,20 +9,15 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
-import { useAudioState } from "@/lib/audio-state-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useToast } from "@/lib/toast-context";
-import { useFeatures } from "@/lib/features-context";
 import Image from "next/image";
 import { MobileSidebar } from "./MobileSidebar";
 
 const allNavigation = [
-    { name: "Collection", href: "/collection", feature: null },
-    { name: "Radio", href: "/radio", feature: null },
-    { name: "Discovery", href: "/discover", feature: null },
-    { name: "Audiobooks", href: "/audiobooks", feature: "audiobookshelfEnabled" as const },
-    { name: "Podcasts", href: "/podcasts", feature: null },
-    { name: "Browse", href: "/browse/playlists", feature: null },
+    { name: "Collection", href: "/collection" },
+    { name: "Discovery", href: "/discover" },
+    { name: "Browse", href: "/browse/playlists" },
 ];
 
 interface Playlist {
@@ -40,9 +35,6 @@ export function Sidebar() {
     const queryClient = useQueryClient();
     const { isAuthenticated } = useAuth();
     const { toast } = useToast();
-    const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
-        useAudioState();
-    const { audiobookshelfEnabled } = useFeatures();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -179,38 +171,9 @@ export function Sidebar() {
                             <h2 className="text-2xl font-black text-white tracking-tight">
                                 Kima
                             </h2>
-                            {(
-                                !currentTrack &&
-                                !currentAudiobook &&
-                                !currentPodcast
-                            ) ?
-                                <p className="text-sm text-gray-400 font-medium">
-                                    Stream Your Way
-                                </p>
-                            :   <div className="text-xs text-gray-400 truncate">
-                                    <span className="text-gray-500">
-                                        Listening to:{" "}
-                                    </span>
-                                    <span className="text-white font-medium">
-                                        {(
-                                            playbackType === "track" &&
-                                            currentTrack
-                                        ) ?
-                                            `${currentTrack.artist?.name} - ${currentTrack.album?.title}`
-                                        : (
-                                            playbackType === "audiobook" &&
-                                            currentAudiobook
-                                        ) ?
-                                            currentAudiobook.title
-                                        : (
-                                            playbackType === "podcast" &&
-                                            currentPodcast
-                                        ) ?
-                                            currentPodcast.podcastTitle
-                                        :   ""}
-                                    </span>
-                                </div>
-                            }
+                            <p className="text-sm text-gray-400 font-medium">
+                                Stream Your Way
+                            </p>
                         </div>
                     </div>
 
@@ -268,9 +231,7 @@ export function Sidebar() {
                     </span>
                 </div>
                 <div className="space-y-0.5">
-                    {allNavigation.filter((item) =>
-                        item.feature === null || (item.feature === "audiobookshelfEnabled" && audiobookshelfEnabled)
-                    ).map((item, index) => {
+                    {allNavigation.map((item, index) => {
                         const isActive = pathname === item.href;
 
                         return (

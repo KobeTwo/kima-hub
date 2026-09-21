@@ -5,19 +5,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { cn } from "@/utils/cn";
-import { useAudio } from "@/lib/audio-context";
 import { api } from "@/lib/api";
 import { DPAD_KEYS } from "@/lib/tv-utils";
 import { useTVNavigation } from "@/hooks/useTVNavigation";
-import { formatTime, clampTime, formatTimeRemaining } from "@/utils/formatTime";
-import { RefreshCw, SkipBack, SkipForward, Shuffle, Repeat } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 const tvNavigation = [
     { name: "Home", href: "/" },
     { name: "Search", href: "/search" },
     { name: "Collection", href: "/collection" },
-    { name: "Audiobooks", href: "/audiobooks" },
-    { name: "Podcasts", href: "/podcasts" },
     { name: "Discovery", href: "/discover" },
     { name: "Playlists", href: "/playlists" },
 ];
@@ -44,25 +40,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
         },
     });
 
-    const {
-        currentTrack,
-        currentAudiobook,
-        currentPodcast,
-        playbackType,
-        isPlaying,
-        pause,
-        resumeWithGesture,
-        currentTime,
-        duration,
-        next,
-        previous,
-        isShuffle,
-        toggleShuffle,
-        repeatMode,
-        toggleRepeat,
-        seek,
-    } = useAudio();
-
     // Add tv-mode class to body on mount
     useEffect(() => {
         document.documentElement.classList.add('tv-mode');
@@ -72,46 +49,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             document.body.classList.remove('tv-mode');
         };
     }, []);
-
-    const currentTimeRef = useRef(currentTime);
-    const durationRef = useRef(duration);
-
-    useEffect(() => {
-        currentTimeRef.current = currentTime;
-    }, [currentTime]);
-
-    useEffect(() => {
-        durationRef.current = duration;
-    }, [duration]);
-
-    const hasMedia = !!(currentTrack || currentAudiobook || currentPodcast);
-
-    let title = "";
-    let artist = "";
-    let coverUrl: string | null = null;
-
-    if (playbackType === "track" && currentTrack) {
-        title = currentTrack.title;
-        artist = currentTrack.artist?.name || "";
-        coverUrl = currentTrack.album?.coverArt
-            ? api.getCoverArtUrl(currentTrack.album.coverArt, 96)
-            : null;
-    } else if (playbackType === "audiobook" && currentAudiobook) {
-        title = currentAudiobook.title;
-        artist = currentAudiobook.author || "";
-        coverUrl = currentAudiobook.coverUrl
-            ? api.getCoverArtUrl(currentAudiobook.coverUrl, 96)
-            : null;
-    } else if (playbackType === "podcast" && currentPodcast) {
-        title = currentPodcast.title;
-        artist = currentPodcast.podcastTitle || "";
-        coverUrl = currentPodcast.coverUrl
-            ? api.getCoverArtUrl(currentPodcast.coverUrl, 96)
-            : null;
-    }
-
-    // CRITICAL: Clamp currentTime to prevent display of invalid times
-    const clampedCurrentTime = clampTime(currentTime, duration);
 
     // Sync library
     const handleSync = async () => {
@@ -126,43 +63,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
     };
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        // Media keys work globally regardless of focus state
-        if (hasMedia) {
-            switch (e.key) {
-                case DPAD_KEYS.PLAY_PAUSE:
-                case "MediaPlayPause":
-                case " ": // Space bar as play/pause
-                    // Only use space when not in an input field
-                    if (e.key === " ") {
-                        const target = e.target as HTMLElement;
-                        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
-                            return;
-                        }
-                    }
-                    e.preventDefault();
-                    if (isPlaying) { pause(); } else { resumeWithGesture(); }
-                    return;
-                case "MediaTrackNext":
-                    e.preventDefault();
-                    next();
-                    return;
-                case "MediaTrackPrevious":
-                    e.preventDefault();
-                    previous();
-                    return;
-                case DPAD_KEYS.FAST_FORWARD:
-                case "MediaFastForward":
-                    e.preventDefault();
-                    seek(Math.min(currentTimeRef.current + 10, durationRef.current));
-                    return;
-                case DPAD_KEYS.REWIND:
-                case "MediaRewind":
-                    e.preventDefault();
-                    seek(Math.max(currentTimeRef.current - 10, 0));
-                    return;
-            }
-        }
-
         if (isNavFocused) {
             if (e.key === DPAD_KEYS.LEFT) {
                 e.preventDefault();
@@ -183,7 +83,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             // Delegate to content navigation hook
             handleContentKeyDown(e);
         }
-    }, [isNavFocused, focusedTabIndex, router, hasMedia, isPlaying, pause, resumeWithGesture, next, previous, seek, focusFirstCard, handleContentKeyDown]);
+    }, [isNavFocused, focusedTabIndex, router, focusFirstCard, handleContentKeyDown]);
 
     useEffect(() => {
         window.addEventListener("keydown", handleKeyDown);
@@ -253,71 +153,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
                 </button>
             </header>
-
-            {/* Now Playing Bar - below nav */}
-            {hasMedia && (
-                <div className="tv-now-playing-bar">
-                    {coverUrl && (
-                        <Image src={coverUrl} alt={title} width={48} height={48} className="tv-np-cover" />
-                    )}
-                    <div className="tv-np-info">
-                        <div className="tv-np-title">{title}</div>
-                        <div className="tv-np-artist">{artist}</div>
-                    </div>
-                    
-                    {/* Time counter */}
-                    <div className="tv-np-time">
-                        {formatTime(clampedCurrentTime)} / {
-                            playbackType === "podcast" || playbackType === "audiobook"
-                                ? formatTimeRemaining(Math.max(0, duration - clampedCurrentTime))
-                                : formatTime(duration)
-                        }
-                    </div>
-
-                    {/* Shuffle */}
-                    <button
-                        onClick={toggleShuffle}
-                        className={cn("tv-np-ctrl", isShuffle && "active")}
-                        title="Shuffle"
-                    >
-                        <Shuffle className="w-4 h-4" />
-                    </button>
-
-                    {/* Previous */}
-                    <button onClick={previous} className="tv-np-ctrl" title="Previous">
-                        <SkipBack className="w-4 h-4" />
-                    </button>
-
-                    {/* Play/Pause */}
-                    <button onClick={() => isPlaying ? pause() : resumeWithGesture()} className="tv-np-btn">
-                        {isPlaying ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                <rect x="6" y="4" width="4" height="16" />
-                                <rect x="14" y="4" width="4" height="16" />
-                            </svg>
-                        ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                <polygon points="5,3 19,12 5,21" />
-                            </svg>
-                        )}
-                    </button>
-
-                    {/* Next */}
-                    <button onClick={next} className="tv-np-ctrl" title="Next">
-                        <SkipForward className="w-4 h-4" />
-                    </button>
-
-                    {/* Repeat */}
-                    <button
-                        onClick={toggleRepeat}
-                        className={cn("tv-np-ctrl", repeatMode !== "off" && "active")}
-                        title={repeatMode === "one" ? "Repeat One" : repeatMode === "all" ? "Repeat All" : "Repeat Off"}
-                    >
-                        <Repeat className="w-4 h-4" />
-                        {repeatMode === "one" && <span className="tv-np-repeat-one">1</span>}
-                    </button>
-                </div>
-            )}
 
             {/* Content */}
             <main id="main-content" tabIndex={-1} ref={contentRef} className="tv-content">
