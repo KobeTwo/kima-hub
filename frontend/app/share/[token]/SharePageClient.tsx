@@ -153,9 +153,7 @@ export default function SharePageClient() {
                     <p className="text-sm font-medium text-white/70 mb-1">
                         {error?.includes("expired")
                             ? "Link expired"
-                            : error?.includes("limit")
-                              ? "Play limit reached"
-                              : "Not found"}
+                            : "Not found"}
                     </p>
                     <p className="text-xs text-white/30">
                         {error || "This share link is no longer available."}
