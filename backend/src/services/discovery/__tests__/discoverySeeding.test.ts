@@ -4,6 +4,7 @@ import { lidarrService } from '../../lidarr';
 
 jest.mock('../../../utils/db', () => ({
     prisma: {
+        $queryRaw: jest.fn(),
         album: {
             groupBy: jest.fn(),
             findMany: jest.fn(),
@@ -48,16 +49,23 @@ describe('DiscoverySeeding', () => {
     describe('getSeedArtists', () => {
         const userId = 'user-123';
 
-        // Helper: build mock album rows for album.findMany
+        // Helper: build mock album rows for the $queryRaw id sample + album.findMany
         const albums = (...artists: Array<{ id: string; name: string; mbid: string | null }>) =>
-            artists.map((a, i) => ({ artist: { id: a.id, name: a.name, mbid: a.mbid }, albumIndex: i }));
+            artists.map((a, i) => ({ albumId: `album-${i}`, artist: { id: a.id, name: a.name, mbid: a.mbid } }));
+
+        // Mock both the random-id sample ($queryRaw) and the album fetch (findMany)
+        const mockSample = (rows: ReturnType<typeof albums>) => {
+            (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue(rows.map((r) => ({ id: r.albumId })));
+            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(rows.map(({ artist }) => ({ artist })));
+        };
 
         it('should return seed artists from library albums with valid MBIDs', async () => {
-            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(albums(
+            const rows = albums(
                 { id: 'artist-1', name: 'Artist One', mbid: 'valid-mbid-1' },
                 { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
                 { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
-            ));
+            );
+            mockSample(rows);
 
             const result = await seeding.getSeedArtists(userId);
 
@@ -69,13 +77,14 @@ describe('DiscoverySeeding', () => {
                     { name: 'Artist Three', mbid: 'valid-mbid-3' },
                 ])
             );
+            expect(mockPrisma.$queryRaw).toHaveBeenCalled();
             expect(mockPrisma.album.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { location: 'LIBRARY' } })
+                expect.objectContaining({ where: { id: { in: ['album-0', 'album-1', 'album-2'] } } })
             );
         });
 
         it('should filter out artists with temp- MBIDs', async () => {
-            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(albums(
+            mockSample(albums(
                 { id: 'artist-1', name: 'Artist One', mbid: 'temp-12345' },
                 { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
                 { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
@@ -90,7 +99,7 @@ describe('DiscoverySeeding', () => {
         });
 
         it('should filter out artists with null MBIDs', async () => {
-            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(albums(
+            mockSample(albums(
                 { id: 'artist-1', name: 'Artist One', mbid: null },
                 { id: 'artist-2', name: 'Artist Two', mbid: 'valid-mbid-2' },
                 { id: 'artist-3', name: 'Artist Three', mbid: 'valid-mbid-3' },
@@ -105,11 +114,13 @@ describe('DiscoverySeeding', () => {
         });
 
         it('should return an empty array when the library has no albums', async () => {
+            (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([]);
             (mockPrisma.album.findMany as jest.Mock).mockResolvedValue([]);
 
             const result = await seeding.getSeedArtists(userId);
 
             expect(result).toEqual([]);
+            expect(mockPrisma.album.findMany).not.toHaveBeenCalled();
         });
 
         it('should respect seedCount parameter', async () => {
@@ -118,7 +129,7 @@ describe('DiscoverySeeding', () => {
                 name: `Artist ${i}`,
                 mbid: `mbid-${i}`,
             }));
-            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(albums(...artists));
+            mockSample(albums(...artists));
 
             const result = await seeding.getSeedArtists(userId, 5);
 
@@ -126,7 +137,7 @@ describe('DiscoverySeeding', () => {
         });
 
         it('should deduplicate artists appearing in multiple albums', async () => {
-            (mockPrisma.album.findMany as jest.Mock).mockResolvedValue(albums(
+            mockSample(albums(
                 { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
                 { id: 'artist-1', name: 'Same Artist', mbid: 'valid-mbid-1' },
                 { id: 'artist-2', name: 'Different Artist', mbid: 'valid-mbid-2' },

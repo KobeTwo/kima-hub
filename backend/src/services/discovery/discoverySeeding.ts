@@ -30,12 +30,20 @@ export class DiscoverySeeding {
     async getSeedArtists(_userId: string, seedCount?: number): Promise<SeedArtist[]> {
         const limit = seedCount ?? this.DEFAULT_SEED_COUNT;
 
+        // ORDER BY random() so the sample pool rotates between runs
+        const sampleIds: { id: string }[] = await prisma.$queryRaw`
+            SELECT "id" FROM "Album" WHERE "location" = 'LIBRARY'
+            ORDER BY random() LIMIT ${this.LIBRARY_SAMPLE_SIZE}
+        `;
+        if (sampleIds.length === 0) {
+            return [];
+        }
+
         const albums = await prisma.album.findMany({
-            where: { location: 'LIBRARY' },
+            where: { id: { in: sampleIds.map((a) => a.id) } },
             select: {
                 artist: { select: { id: true, name: true, mbid: true } },
             },
-            take: this.LIBRARY_SAMPLE_SIZE,
         });
 
         const artistMap = new Map<string, SeedArtist>();

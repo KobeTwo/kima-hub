@@ -58,15 +58,6 @@ export interface DeezerGenre {
     imageUrl: string | null;
 }
 
-export interface DeezerPodcast {
-    id: number;
-    title: string;
-    description: string;
-    fans: number;
-    link: string;
-    pictureUrl: string | null;
-}
-
 export interface DeezerGenreWithRadios {
     id: number;
     name: string;
@@ -727,76 +718,6 @@ class DeezerService {
         }
     }
 
-    // Not cached: user queries are high-cardinality and Deezer's search is fast (<300ms).
-    // Only the popular-podcasts feed is cached since it's a shared response.
-    async searchPodcasts(query: string, limit: number = 20): Promise<DeezerPodcast[]> {
-        try {
-            const response = await axios.get(`${DEEZER_API}/search/podcast`, {
-                params: { q: query, limit },
-                timeout: 10000,
-            });
-
-            return (response.data?.data || []).map((podcast: any) => ({
-                id: podcast.id,
-                title: podcast.title || "Unknown",
-                description: podcast.description || "",
-                fans: podcast.fans || 0,
-                link: podcast.link || "",
-                pictureUrl: podcast.picture_big || podcast.picture_medium || podcast.picture || null,
-            }));
-        } catch (error: any) {
-            logger.error("Deezer podcast search error:", error.message);
-            return [];
-        }
-    }
-
-    async getTopPodcasts(limit: number = 20): Promise<DeezerPodcast[]> {
-        const cacheKey = `podcasts:top:${limit}`;
-        const cached = await this.getCached(cacheKey);
-        if (cached) return JSON.parse(cached);
-
-        try {
-            const response = await axios.get(`${DEEZER_API}/chart/0/podcasts`, {
-                params: { limit },
-                timeout: 10000,
-            });
-
-            const results: DeezerPodcast[] = (response.data?.data || []).map((podcast: any) => ({
-                id: podcast.id,
-                title: podcast.title || "Unknown",
-                description: podcast.description || "",
-                fans: podcast.fans || 0,
-                link: podcast.link || "",
-                pictureUrl: podcast.picture_big || podcast.picture_medium || podcast.picture || null,
-            }));
-
-            await this.setCache(cacheKey, JSON.stringify(results));
-            return results;
-        } catch (error: any) {
-            logger.error("Deezer top podcasts error:", error.message);
-            return [];
-        }
-    }
 }
 
 export const deezerService = new DeezerService();
-
-/**
- * Dedupe podcast results by normalized title. iTunes results are preferred
- * (they carry feedUrl); Deezer results fill gaps only when title is unseen.
- */
-export function mergeAndDedupePodcasts<T extends { title?: string; name?: string }>(
-    primary: T[],
-    fallback: T[]
-): T[] {
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const seen = new Set<string>();
-    const out: T[] = [];
-    for (const item of [...primary, ...fallback]) {
-        const key = normalize(item.title ?? item.name ?? "");
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        out.push(item);
-    }
-    return out;
-}
