@@ -21,7 +21,6 @@ import { musicBrainzService } from "./musicbrainz";
 import { updateBatchStatus } from "./discovery/optimisticBatchUpdate";
 import { lidarrService } from "./lidarr";
 import { scanQueue } from "../workers/queues";
-import { subWeeks } from "date-fns";
 import { resolveGenerationWeekStart } from "../lib/discoveryWeek";
 import { getSystemSettings } from "../utils/systemSettings";
 import { discoveryLogger } from "./discoveryLogger";
@@ -1175,22 +1174,31 @@ export class DiscoverWeeklyService {
                 ...libraryAnchors.map((t) => t.id),
             ]);
 
-            // Find popular library tracks (from artists with most plays or albums)
+            // Find popular library tracks: rank artists by library album count
+            // (metadata signal replacing the removed play-history ranking)
             // Exclude albums already used
+            const popularArtists = await prisma.album.groupBy({
+                by: ["artistId"],
+                where: {
+                    location: "LIBRARY",
+                    id: { notIn: Array.from(usedAlbumIds) },
+                },
+                _count: true,
+                orderBy: { _count: { artistId: "desc" } },
+                take: 50,
+            });
+
             const popularLibraryTracks = await prisma.track.findMany({
                 where: {
                     album: {
                         location: "LIBRARY",
+                        artistId: { in: popularArtists.map((a) => a.artistId) },
                         id: { notIn: Array.from(usedAlbumIds) }, // 1 per album
                     },
                     id: { notIn: Array.from(usedTrackIds) },
                 },
                 include: {
                     album: { include: { artist: true } },
-                },
-                orderBy: {
-                    // Order by album's artist name for variety, or you could add play count
-                    album: { artist: { name: "asc" } },
                 },
                 take: needed * 10, // Get extra for 1-per-album selection
             });
@@ -2501,34 +2509,25 @@ export class DiscoverWeeklyService {
     }
 
     /**
-     * Get user's top genres from listening history
+     * Get user's top genres. Play history is gone, so the signal is the
+     * most recently synced library albums instead of recent plays.
      */
-    private async getUserTopGenres(userId: string): Promise<string[]> {
+    private async getUserTopGenres(_userId: string): Promise<string[]> {
         try {
-            // Get recent plays with artist info
-            const recentPlays = await prisma.play.findMany({
-                where: {
-                    userId,
-                    playedAt: { gte: subWeeks(new Date(), 12) }, // Last 3 months
-                },
-                include: {
-                    track: {
-                        include: {
-                            album: {
-                                include: { artist: true },
-                            },
-                        },
-                    },
-                },
+            // Get recently synced library albums with artist info
+            const recentAlbums = await prisma.album.findMany({
+                where: { location: "LIBRARY" },
+                orderBy: { lastSynced: "desc" },
                 take: 500,
+                include: { artist: true },
             });
 
             // Collect genres from artists (stored as tags)
             // MERGE canonical genres + user-added genres
             const genreCounts = new Map<string, number>();
 
-            for (const play of recentPlays) {
-                const artist = play.track?.album?.artist;
+            for (const album of recentAlbums) {
+                const artist = album.artist;
                 if (!artist) continue;
 
                 // Collect canonical genres

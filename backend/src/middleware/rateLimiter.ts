@@ -26,8 +26,6 @@ export const apiLimiter = rateLimit({
             fullPath === "/api/health" ||
             // Track streaming: /api/library/tracks/:id/stream
             (fullPath.startsWith("/api/library/tracks/") && fullPath.endsWith("/stream")) ||
-            // Podcast streaming: /api/podcasts/:podcastId/episodes/:episodeId/stream
-            (fullPath.startsWith("/api/podcasts/") && fullPath.endsWith("/stream")) ||
             // Soulseek search polling: /api/soulseek/search/:searchId (no /status suffix)
             /^\/api\/soulseek\/search\/[a-f0-9-]+$/.test(fullPath) ||
             // Spotify import status: /api/spotify/import/:jobId/status

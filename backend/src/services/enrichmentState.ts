@@ -17,7 +17,7 @@ const AUDIO_ANALYSIS_CONTROL_CHANNEL = "audio:analysis:control";
 const AUDIO_ANALYSIS_GATE_KEY = "audio:analysis:gate";
 
 export type EnrichmentStatus = "idle" | "running" | "paused" | "stopping";
-export type EnrichmentPhase = "artists" | "tracks" | "scan" | "audio" | "vibe" | "podcasts" | null;
+export type EnrichmentPhase = "artists" | "tracks" | "scan" | "audio" | "vibe" | null;
 
 export interface EnrichmentState {
     status: EnrichmentStatus;
