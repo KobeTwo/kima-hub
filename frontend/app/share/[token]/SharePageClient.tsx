@@ -1,18 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import {
-    Play,
-    Pause,
-    SkipForward,
-    SkipBack,
-    Music,
-    Volume2,
-    VolumeX,
-    Github,
-} from "lucide-react";
+import { Music, Github } from "lucide-react";
 import { formatTime, formatDuration } from "@/utils/formatTime";
 
 interface ShareTrack {
@@ -109,17 +100,6 @@ export default function SharePageClient() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [progress, setProgress] = useState(0);
-    const [duration, setDuration] = useState(0);
-    const [volume, setVolume] = useState(0.8);
-    const [isMuted, setIsMuted] = useState(false);
-    const [playbackError, setPlaybackError] = useState<string | null>(null);
-
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const progressBarRef = useRef<HTMLDivElement | null>(null);
-
     useEffect(() => {
         fetch(`/api/share/${token}`)
             .then(async (res) => {
@@ -136,21 +116,7 @@ export default function SharePageClient() {
             .finally(() => setLoading(false));
     }, [token]);
 
-    useEffect(() => {
-        const audio = audioRef.current;
-        return () => {
-            audio?.pause();
-            if (audio) audio.src = "";
-        };
-    }, []);
-
     const tracks = useMemo(() => data ? getTracksFromEntity(data) : [], [data]);
-    const currentTrack = tracks[currentTrackIndex];
-
-    const getStreamUrl = useCallback(
-        (trackId: string) => `/api/share/${token}/stream/${trackId}`,
-        [token]
-    );
 
     const coverArtId = data ? getCoverUrl(data) : null;
 
@@ -159,92 +125,6 @@ export default function SharePageClient() {
     }
 
     const coverArtUrl = coverArtId ? buildCoverArtUrl(coverArtId) : null;
-
-    const playTrack = useCallback(
-        (index: number) => {
-            if (!audioRef.current || !tracks[index]) return;
-            setCurrentTrackIndex(index);
-            setPlaybackError(null);
-            audioRef.current.src = getStreamUrl(tracks[index].id);
-            audioRef.current.play()
-                .then(() => setIsPlaying(true))
-                .catch(() => setIsPlaying(false));
-        },
-        [tracks, getStreamUrl]
-    );
-
-    const togglePlay = useCallback(() => {
-        if (!audioRef.current || !currentTrack) return;
-        if (isPlaying) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        } else {
-            if (!audioRef.current.src || audioRef.current.src === window.location.href) {
-                audioRef.current.src = getStreamUrl(currentTrack.id);
-            }
-            setPlaybackError(null);
-            audioRef.current.play()
-                .then(() => setIsPlaying(true))
-                .catch(() => setIsPlaying(false));
-        }
-    }, [isPlaying, currentTrack, getStreamUrl]);
-
-    const nextTrack = useCallback(() => {
-        if (currentTrackIndex < tracks.length - 1) {
-            playTrack(currentTrackIndex + 1);
-        } else {
-            setIsPlaying(false);
-        }
-    }, [currentTrackIndex, tracks.length, playTrack]);
-
-    const prevTrack = useCallback(() => {
-        if (audioRef.current && audioRef.current.currentTime > 3) {
-            audioRef.current.currentTime = 0;
-        } else if (currentTrackIndex > 0) {
-            playTrack(currentTrackIndex - 1);
-        }
-    }, [currentTrackIndex, playTrack]);
-
-    const handleProgressClick = useCallback(
-        (e: React.MouseEvent<HTMLDivElement>) => {
-            if (!audioRef.current || !progressBarRef.current) return;
-            const rect = progressBarRef.current.getBoundingClientRect();
-            const fraction = Math.max(
-                0,
-                Math.min(1, (e.clientX - rect.left) / rect.width)
-            );
-            audioRef.current.currentTime = fraction * (audioRef.current.duration || 0);
-        },
-        []
-    );
-
-    const toggleMute = useCallback(() => {
-        if (!audioRef.current) return;
-        setIsMuted((prev) => {
-            audioRef.current!.muted = !prev;
-            return !prev;
-        });
-    }, []);
-
-    useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.volume = volume;
-        }
-    }, [volume]);
-
-    const handleAudioError = useCallback(() => {
-        setIsPlaying(false);
-        if (audioRef.current?.error) {
-            const code = audioRef.current.error.code;
-            if (code === MediaError.MEDIA_ERR_NETWORK) {
-                setPlaybackError("Playback failed. The link may have expired or reached its play limit.");
-            } else if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-                setPlaybackError("This audio format is not supported by your browser.");
-            } else {
-                setPlaybackError("Playback error occurred.");
-            }
-        }
-    }, []);
 
     const totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
 
@@ -287,19 +167,6 @@ export default function SharePageClient() {
 
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
-            <audio
-                ref={audioRef}
-                onTimeUpdate={() => {
-                    if (audioRef.current) {
-                        setProgress(audioRef.current.currentTime);
-                        setDuration(audioRef.current.duration || 0);
-                    }
-                }}
-                onEnded={nextTrack}
-                onError={handleAudioError}
-                preload="none"
-            />
-
             {/* Main content */}
             <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 md:py-12">
                 <div className="w-full max-w-lg">
@@ -334,108 +201,10 @@ export default function SharePageClient() {
                         </p>
                     </div>
 
-                    {/* Player controls */}
-                    {tracks.length > 0 && (
-                        <div className="mb-8">
-                            {playbackError && (
-                                <p className="text-xs text-red-400/70 text-center mb-3">
-                                    {playbackError}
-                                </p>
-                            )}
-
-                            {/* Progress */}
-                            <div
-                                ref={progressBarRef}
-                                className="h-1 bg-white/[0.08] rounded-full cursor-pointer mb-2 group"
-                                onClick={handleProgressClick}
-                            >
-                                <div
-                                    className="h-full bg-brand rounded-full transition-[width] duration-100"
-                                    style={{
-                                        width: `${duration > 0 ? (progress / duration) * 100 : 0}%`,
-                                    }}
-                                />
-                            </div>
-
-                            <div className="flex justify-between text-[10px] font-mono text-white/20 mb-5 tabular-nums">
-                                <span>{formatTime(progress)}</span>
-                                <span>{formatTime(duration)}</span>
-                            </div>
-
-                            {/* Buttons */}
-                            <div className="flex items-center justify-center gap-6">
-                                {tracks.length > 1 && (
-                                    <button
-                                        onClick={prevTrack}
-                                        className="text-white/30 hover:text-white/70 transition-colors"
-                                    >
-                                        <SkipBack className="w-5 h-5" />
-                                    </button>
-                                )}
-
-                                <button
-                                    onClick={togglePlay}
-                                    className="w-12 h-12 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform"
-                                >
-                                    {isPlaying ? (
-                                        <Pause className="w-5 h-5 fill-current text-black" />
-                                    ) : (
-                                        <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                                    )}
-                                </button>
-
-                                {tracks.length > 1 && (
-                                    <button
-                                        onClick={nextTrack}
-                                        disabled={currentTrackIndex >= tracks.length - 1}
-                                        className="text-white/30 hover:text-white/70 transition-colors disabled:opacity-20"
-                                    >
-                                        <SkipForward className="w-5 h-5" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Volume */}
-                            <div className="flex items-center justify-center gap-2 mt-4">
-                                <button
-                                    onClick={toggleMute}
-                                    className="text-white/20 hover:text-white/40 transition-colors"
-                                >
-                                    {isMuted || volume === 0 ? (
-                                        <VolumeX className="w-3.5 h-3.5" />
-                                    ) : (
-                                        <Volume2 className="w-3.5 h-3.5" />
-                                    )}
-                                </button>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.01"
-                                    value={isMuted ? 0 : volume}
-                                    onChange={(e) => {
-                                        const v = parseFloat(e.target.value);
-                                        setVolume(v);
-                                        setIsMuted(v === 0);
-                                    }}
-                                    className="w-20 h-0.5 accent-white/40 cursor-pointer"
-                                />
-                            </div>
-
-                            {/* Now playing indicator */}
-                            {currentTrack && tracks.length > 1 && (
-                                <p className="text-[10px] text-white/25 text-center mt-3 truncate">
-                                    {currentTrack.title}
-                                </p>
-                            )}
-                        </div>
-                    )}
-
                     {/* Track list */}
                     {tracks.length > 1 && (
                         <div className="border-t border-white/[0.04] pt-4">
                             {tracks.map((track, index) => {
-                                const isActive = index === currentTrackIndex;
                                 const trackCoverId = track.album?.coverUrl || coverArtId;
                                 const trackCoverUrl = trackCoverId
                                     ? buildCoverArtUrl(trackCoverId)
@@ -448,29 +217,14 @@ export default function SharePageClient() {
                                         : String(trackNumber);
 
                                 return (
-                                    <button
+                                    <div
                                         key={track.id}
-                                        onClick={() => playTrack(index)}
-                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors group ${
-                                            isActive
-                                                ? "bg-white/[0.04]"
-                                                : "hover:bg-white/[0.02]"
-                                        }`}
+                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md"
                                     >
                                         <div className="w-8 text-center flex-shrink-0">
-                                            {isActive && isPlaying ? (
-                                                <div className="flex items-center justify-center gap-[2px] h-3.5">
-                                                    <span className="w-[2px] h-2.5 bg-brand rounded-full animate-pulse" />
-                                                    <span className="w-[2px] h-3.5 bg-brand rounded-full animate-pulse [animation-delay:150ms]" />
-                                                    <span className="w-[2px] h-2 bg-brand rounded-full animate-pulse [animation-delay:300ms]" />
-                                                </div>
-                                            ) : (
-                                                <span className={`text-[11px] font-mono ${
-                                                    isActive ? "text-brand" : "text-white/15"
-                                                }`}>
-                                                    {trackLabel}
-                                                </span>
-                                            )}
+                                            <span className="text-[11px] font-mono text-white/15">
+                                                {trackLabel}
+                                            </span>
                                         </div>
 
                                         {trackCoverUrl && (
@@ -486,9 +240,7 @@ export default function SharePageClient() {
                                         )}
 
                                         <div className="flex-1 min-w-0 text-left">
-                                            <p className={`text-sm truncate ${
-                                                isActive ? "text-brand" : "text-white/70"
-                                            }`}>
+                                            <p className="text-sm text-white/70 truncate">
                                                 {track.title}
                                             </p>
                                             {track.album?.artist?.name && (
@@ -501,7 +253,7 @@ export default function SharePageClient() {
                                         <span className="text-[11px] font-mono text-white/15 flex-shrink-0 tabular-nums">
                                             {track.duration ? formatTime(track.duration) : ""}
                                         </span>
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
