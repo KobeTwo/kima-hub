@@ -19,18 +19,6 @@ async function login(page: Page): Promise<void> {
     await page.waitForURL(/\/($|\?|home)/, { timeout: 15000 });
 }
 
-function collectConsoleErrors(page: Page): string[] {
-    const errors: string[] = [];
-    page.on("console", (msg) => {
-        if (msg.type() === "error") {
-            const text = msg.text();
-            if (text.includes("favicon") || text.includes("serviceWorker")) return;
-            errors.push(text);
-        }
-    });
-    return errors;
-}
-
 function collectNetworkErrors(page: Page): string[] {
     const errors: string[] = [];
     page.on("response", (resp) => {
