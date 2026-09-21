@@ -28,7 +28,6 @@ export const queryKeys = {
     albums: (filters?: Record<string, unknown>) => ["albums", filters] as const,
 
     // Library queries
-    library: () => ["library"] as const,
     libraryArtists: (params: {
         filter?: string;
         sortBy?: string;

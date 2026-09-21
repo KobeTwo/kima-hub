@@ -298,11 +298,10 @@ class ApiClient {
     async request<T>(
         endpoint: string,
         options: RequestInit & {
-            silent404?: boolean;
             _retryCount?: number;
         } = {}
     ): Promise<T> {
-        const { silent404, _retryCount = 0, ...fetchOptions } = options;
+        const { _retryCount = 0, ...fetchOptions } = options;
         const headers: HeadersInit = {
             "Content-Type": "application/json",
             ...fetchOptions.headers,
@@ -336,15 +335,13 @@ class ApiClient {
                 };
             }
 
-            // Only log non-404 errors (404s are often expected)
-            if (!(silent404 && response.status === 404)) {
-                console.error(`[API] Request failed: ${url}`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    error,
-                    headers: Object.fromEntries(response.headers.entries()),
-                });
-            }
+            // Log API errors (404s are often expected but still useful in logs)
+            console.error(`[API] Request failed: ${url}`, {
+                status: response.status,
+                statusText: response.statusText,
+                error,
+                headers: Object.fromEntries(response.headers.entries()),
+            });
 
             // Handle 401 with token refresh (retry once)
             if (

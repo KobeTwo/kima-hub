@@ -186,7 +186,8 @@ export default function SettingsPage() {
                     </>
                 )}
 
-                {/* Save Button - Fixed at bottom */}
+                {/* Save Button - Fixed at bottom (admin-only: system settings) */}
+                {isAdmin && (
                 <div className="sticky bottom-0 pt-8 pb-8 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a] to-[#0a0a0a]/80">
                     <div className="relative">
                         <button
@@ -203,6 +204,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
+                )}
         </SettingsLayout>
     );
 }
