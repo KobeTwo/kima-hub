@@ -30,12 +30,6 @@ export interface EnrichmentState {
         failed: number;
         current?: string;
     };
-    audio: {
-        total: number;
-        completed: number;
-        failed: number;
-        processing: number;
-    };
 }
 
 export interface EnrichmentFailure {
@@ -70,13 +64,6 @@ export interface ConcurrencyConfig {
     estimatedSpeed: string;
     artistsPerMin: number;
     tracksPerMin: number;
-}
-
-export interface AnalysisWorkersConfig {
-    workers: number;
-    cpuCores: number;
-    recommended: number;
-    description: string;
 }
 
 export const enrichmentApi = {
@@ -155,44 +142,4 @@ export const enrichmentApi = {
         });
     },
 
-    /**
-     * Get audio analyzer worker configuration
-     */
-    getAnalysisWorkers: async (): Promise<AnalysisWorkersConfig> => {
-        return api.get("/analysis/workers");
-    },
-
-    /**
-     * Set audio analyzer worker count (1-8)
-     */
-    setAnalysisWorkers: async (workers: number): Promise<AnalysisWorkersConfig> => {
-        return api.request("/analysis/workers", {
-            method: "PUT",
-            body: JSON.stringify({ workers }),
-        });
-    },
-
-    /**
-     * Get CLAP analyzer worker configuration
-     */
-    getClapWorkers: async (): Promise<AnalysisWorkersConfig> => {
-        return api.get("/analysis/clap-workers");
-    },
-
-    /**
-     * Set CLAP analyzer worker count (1-8)
-     */
-    setClapWorkers: async (workers: number): Promise<AnalysisWorkersConfig> => {
-        return api.request("/analysis/clap-workers", {
-            method: "PUT",
-            body: JSON.stringify({ workers }),
-        });
-    },
-
-    /**
-     * Reset all vibe embeddings (queue all tracks for re-embedding)
-     */
-    resetVibeEmbeddings: async (): Promise<{ message: string; queued: number }> => {
-        return api.post("/analysis/vibe/start", { force: true });
-    },
 };

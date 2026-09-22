@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
 import { api } from "@/lib/api";
@@ -17,12 +17,10 @@ import {
     Loader2,
     User,
     Heart,
-    Activity,
     Pause,
     Play,
     StopCircle,
     AlertTriangle,
-    Waves,
     ChevronDown,
     type LucideIcon,
 } from "lucide-react";
@@ -186,12 +184,7 @@ function EnrichmentFailuresList() {
     );
 }
 
-type ConfirmTarget =
-    | "artists"
-    | "moodTags"
-    | "audioAnalysis"
-    | "allEnrichment"
-    | null;
+type ConfirmTarget = "artists" | "moodTags" | "allEnrichment" | null;
 
 const confirmMeta: Record<
     NonNullable<ConfirmTarget>,
@@ -209,16 +202,10 @@ const confirmMeta: Record<
             "This deletes all mood and vibe tags for every track. Re-running Last.fm tagging on a large library takes time.",
         confirmText: "Reset Mood Tags",
     },
-    audioAnalysis: {
-        title: "Reset Audio Analysis?",
-        message:
-            "This deletes BPM, key, energy, and danceability results for every track. Re-analysis is CPU-intensive and can take a long time on large libraries.",
-        confirmText: "Reset Audio Analysis",
-    },
     allEnrichment: {
         title: "Reset All Enrichment Data?",
         message:
-            "This wipes everything: artist metadata, audio analysis, vibe embeddings, mood tags, and all failure records. Your entire library will be re-enriched from scratch. This is slow to rebuild on large libraries.",
+            "This wipes everything: artist metadata, mood tags, and all failure records. Your entire library will be re-enriched from scratch. This is slow to rebuild on large libraries.",
         confirmText: "Reset Everything",
     },
 };
@@ -230,11 +217,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
     const [cleaningStaleJobs, setCleaningStaleJobs] = useState(false);
     const [resettingArtists, setResettingArtists] = useState(false);
     const [resettingMoodTags, setResettingMoodTags] = useState(false);
-    const [resettingAudio, setResettingAudio] = useState(false);
-    const [resettingVibe, setResettingVibe] = useState(false);
     const [resettingEnrichment, setResettingEnrichment] = useState(false);
-    const [retryingFailed, setRetryingFailed] = useState(false);
-    const [retryResult, setRetryResult] = useState<{ reset: number } | null>(null);
     const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget>(null);
     const [maintenanceOpen, setMaintenanceOpen] = useState(false);
     const [cleanupResult, setCleanupResult] = useState<{
@@ -291,12 +274,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             staleTime: 0,
         });
 
-    const { data: workersConfig, isLoading: isWorkersLoading } = useQuery({
-        queryKey: ["analysis-workers"],
-        queryFn: () => enrichmentApi.getAnalysisWorkers(),
-        staleTime: 0,
-    });
-
     const setConcurrencyMutation = useMutation({
         mutationFn: (concurrency: number) =>
             enrichmentApi.setConcurrency(concurrency),
@@ -320,106 +297,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             );
         },
     });
-
-    const setAnalysisWorkersMutation = useMutation({
-        mutationFn: (workers: number) =>
-            enrichmentApi.setAnalysisWorkers(workers),
-        onMutate: async (newWorkers) => {
-            await queryClient.cancelQueries({
-                queryKey: ["analysis-workers"],
-            });
-            const previousWorkers = queryClient.getQueryData([
-                "analysis-workers",
-            ]);
-            queryClient.setQueryData(["analysis-workers"], {
-                workers: newWorkers,
-                cpuCores: workersConfig?.cpuCores || 4,
-                recommended: workersConfig?.recommended || 2,
-                description: `Using ${newWorkers} of ${
-                    workersConfig?.cpuCores || 4
-                } available CPU cores`,
-            });
-            return { previousWorkers };
-        },
-        onError: (_err, _newWorkers, context) => {
-            queryClient.setQueryData(
-                ["analysis-workers"],
-                context?.previousWorkers
-            );
-        },
-    });
-
-    const { data: clapWorkersConfig, isLoading: isClapWorkersLoading } = useQuery({
-        queryKey: ["clap-workers"],
-        queryFn: () => enrichmentApi.getClapWorkers(),
-        staleTime: 0,
-    });
-
-    const setClapWorkersMutation = useMutation({
-        mutationFn: (workers: number) =>
-            enrichmentApi.setClapWorkers(workers),
-        onMutate: async (newWorkers) => {
-            await queryClient.cancelQueries({
-                queryKey: ["clap-workers"],
-            });
-            const previousWorkers = queryClient.getQueryData([
-                "clap-workers",
-            ]);
-            queryClient.setQueryData(["clap-workers"], {
-                workers: newWorkers,
-                cpuCores: clapWorkersConfig?.cpuCores || 4,
-                recommended: clapWorkersConfig?.recommended || 1,
-                description: `Using ${newWorkers} of ${
-                    clapWorkersConfig?.cpuCores || 4
-                } available CPU cores`,
-            });
-            return { previousWorkers };
-        },
-        onError: (_err, _newWorkers, context) => {
-            queryClient.setQueryData(
-                ["clap-workers"],
-                context?.previousWorkers
-            );
-        },
-    });
-
-    // Debounced slider commits -- only send API call after user stops dragging
-    const workerDebounceRef = useRef<NodeJS.Timeout | null>(null);
-    const debouncedSetWorkers = useCallback((workers: number) => {
-        if (workerDebounceRef.current) clearTimeout(workerDebounceRef.current);
-        // Optimistic UI update immediately
-        queryClient.setQueryData(["analysis-workers"], {
-            workers,
-            cpuCores: workersConfig?.cpuCores || 4,
-            recommended: workersConfig?.recommended || 2,
-            description: `Using ${workers} of ${workersConfig?.cpuCores || 4} available CPU cores`,
-        });
-        workerDebounceRef.current = setTimeout(() => {
-            setAnalysisWorkersMutation.mutate(workers);
-        }, 500);
-    }, [workersConfig, queryClient, setAnalysisWorkersMutation]);
-
-    const clapDebounceRef = useRef<NodeJS.Timeout | null>(null);
-    const debouncedSetClapWorkers = useCallback((workers: number) => {
-        if (clapDebounceRef.current) clearTimeout(clapDebounceRef.current);
-        queryClient.setQueryData(["clap-workers"], {
-            workers,
-            cpuCores: clapWorkersConfig?.cpuCores || 4,
-            recommended: clapWorkersConfig?.recommended || 1,
-            description: `Using ${workers} of ${clapWorkersConfig?.cpuCores || 4} available CPU cores`,
-        });
-        clapDebounceRef.current = setTimeout(() => {
-            setClapWorkersMutation.mutate(workers);
-        }, 500);
-    }, [clapWorkersConfig, queryClient, setClapWorkersMutation]);
-
-    // Clean up debounce timers on unmount
-    useEffect(() => {
-        return () => {
-            if (workerDebounceRef.current) clearTimeout(workerDebounceRef.current);
-            if (clapDebounceRef.current) clearTimeout(clapDebounceRef.current);
-        };
-    }, []);
 
     const enrichmentSpeed = concurrencyConfig?.concurrency ?? 1;
 
@@ -514,36 +391,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         }
     };
 
-    const execResetAudioAnalysis = async () => {
-        setResettingAudio(true);
-        setError(null);
-        try {
-            await api.resetAudioAnalysisOnly();
-            refreshNotifications();
-            refetchProgress();
-        } catch (err) {
-            console.error("Reset audio analysis error:", err);
-            setError("Failed to reset audio analysis");
-        } finally {
-            setResettingAudio(false);
-        }
-    };
-
-    const execResetVibeEmbeddings = async () => {
-        setResettingVibe(true);
-        setError(null);
-        try {
-            await enrichmentApi.resetVibeEmbeddings();
-            refreshNotifications();
-            refetchProgress();
-        } catch (err) {
-            console.error("Reset vibe embeddings error:", err);
-            setError("Failed to reset vibe embeddings");
-        } finally {
-            setResettingVibe(false);
-        }
-    };
-
     const handleClearCaches = async () => {
         setClearingCaches(true);
         setError(null);
@@ -573,22 +420,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         }
     };
 
-    const handleRetryFailedAnalysis = async () => {
-        setRetryingFailed(true);
-        setRetryResult(null);
-        setError(null);
-        try {
-            const result = await api.retryFailedAnalysis();
-            setRetryResult({ reset: result.reset });
-            refetchProgress();
-        } catch (err) {
-            console.error("Retry failed analysis error:", err);
-            setError("Failed to retry analysis");
-        } finally {
-            setRetryingFailed(false);
-        }
-    };
-
     const execResetEnrichment = async () => {
         setResettingEnrichment(true);
         setError(null);
@@ -609,7 +440,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         setConfirmTarget(null);
         if (target === "artists") await execResetArtists();
         else if (target === "moodTags") await execResetMoodTags();
-        else if (target === "audioAnalysis") await execResetAudioAnalysis();
         else if (target === "allEnrichment") await execResetEnrichment();
     };
 
@@ -676,15 +506,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             <h3 className="text-sm font-medium text-white">
                                 Enrichment Status
                             </h3>
-                            {enrichmentProgress.coreComplete &&
-                                !enrichmentProgress.isFullyComplete && (
-                                    <span className="text-[10px] font-mono text-purple-400 flex items-center gap-1 uppercase tracking-wider">
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                        {enrichmentProgress.audioAnalysis.pending > 0 || enrichmentProgress.audioAnalysis.processing > 0
-                                            ? "Audio analysis running"
-                                            : "Vibe embeddings running"}
-                                    </span>
-                                )}
                             {enrichmentProgress.isFullyComplete && (
                                 <span className="text-[10px] font-mono text-green-400 flex items-center gap-1 uppercase tracking-wider">
                                     <CheckCircle className="w-3 h-3" />
@@ -743,39 +564,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 </button>
                             </div>
 
-                            {/* Audio Analysis */}
-                            <div className="flex items-start gap-2">
-                                <div className="flex-1">
-                                    <EnrichmentStage
-                                        icon={Activity}
-                                        label="Audio Analysis"
-                                        description="BPM, key, energy, and danceability from audio files"
-                                        completed={
-                                            enrichmentProgress.audioAnalysis.completed
-                                        }
-                                        total={enrichmentProgress.audioAnalysis.total}
-                                        progress={
-                                            enrichmentProgress.audioAnalysis.progress
-                                        }
-                                        processing={
-                                            enrichmentProgress.audioAnalysis.processing
-                                        }
-                                        queued={enrichmentProgress.audioAnalysis.queued}
-                                        failed={enrichmentProgress.audioAnalysis.failed}
-                                        permanentlyFailed={enrichmentProgress.audioAnalysis.permanentlyFailed}
-                                        isBackground={true}
-                                    />
-                                </div>
-                                <button
-                                    onClick={() => setConfirmTarget("audioAnalysis")}
-                                    disabled={resettingAudio || syncing || reEnriching || isEnrichmentActive}
-                                    aria-label="Reset and re-run audio analysis"
-                                    className="mt-1 px-3 py-2.5 min-h-[44px] text-[10px] font-mono bg-white/5 border border-white/10 text-white/40 rounded-lg
-                                        hover:bg-white/10 hover:text-white/60 disabled:opacity-30 disabled:cursor-not-allowed transition-all whitespace-nowrap uppercase tracking-wider"
-                                >
-                                    {resettingAudio ? "Resetting..." : "Re-run"}
-                                </button>
-                            </div>
                         </div>
 
                         {/* Control Buttons */}
@@ -1029,18 +817,6 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     ? "Cleaning..."
                                     : "Cleanup Stale Jobs"}
                             </button>
-                            {((enrichmentProgress?.audioAnalysis?.failed ?? 0) > 0 || (enrichmentProgress?.audioAnalysis?.permanentlyFailed ?? 0) > 0) && (
-                                <button
-                                    onClick={handleRetryFailedAnalysis}
-                                    disabled={retryingFailed || isEnrichmentActive}
-                                    className={secondaryBtnClass}
-                                >
-                                    {retryingFailed
-                                        ? "Retrying..."
-                                        : `Retry Failed Analysis (${(enrichmentProgress?.audioAnalysis?.failed || 0) + (enrichmentProgress?.audioAnalysis?.permanentlyFailed || 0)})`}
-                                </button>
-                            )}
-
                             {/* Full enrichment reset -- most destructive, visually distinct */}
                             {enrichmentProgress && (
                                 <div className="pt-2 border-t border-white/5">
@@ -1053,16 +829,11 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         {resettingEnrichment ? "Resetting..." : "Reset All Enrichment Data"}
                                     </button>
                                     <p className="mt-1.5 text-[10px] font-mono text-white/25 uppercase tracking-wider">
-                                        Wipes artists, audio analysis, vibe embeddings, and mood tags
+                                        Wipes artist metadata and mood tags
                                     </p>
                                 </div>
                             )}
 
-                            {retryResult && (
-                                <p className="text-xs font-mono text-green-400 uppercase tracking-wider">
-                                    Reset {retryResult.reset} failed tracks to pending
-                                </p>
-                            )}
                             {cleanupResult && cleanupResult.totalCleaned > 0 && (
                                 <p className="text-xs font-mono text-green-400 uppercase tracking-wider">
                                     Cleaned:{" "}

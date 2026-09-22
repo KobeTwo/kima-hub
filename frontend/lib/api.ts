@@ -1208,26 +1208,6 @@ class ApiClient {
                 pending: number;
                 progress: number;
             };
-            audioAnalysis: {
-                total: number;
-                completed: number;
-                pending: number;
-                queued: number;
-                processing: number;
-                failed: number;
-                permanentlyFailed: number;
-                progress: number;
-                isBackground: boolean;
-            };
-            clapEmbeddings: {
-                total: number;
-                completed: number;
-                pending: number;
-                processing: number;
-                failed: number;
-                progress: number;
-                isBackground: boolean;
-            };
             coreComplete: boolean;
             isFullyComplete: boolean;
         }>("/enrichment/progress");
@@ -1256,14 +1236,6 @@ class ApiClient {
         }>("/enrichment/reset-mood-tags", { method: "POST" });
     }
 
-    async resetAudioAnalysisOnly() {
-        return this.request<{
-            message: string;
-            description: string;
-            count: number;
-        }>("/enrichment/reset-audio-analysis", { method: "POST" });
-    }
-
     async resetAllEnrichmentData() {
         return this.request<{
             message: string;
@@ -1272,12 +1244,6 @@ class ApiClient {
             failuresDeleted: number;
             moodBucketsDeleted: number;
         }>("/enrichment/reset-all", {
-            method: "POST",
-        });
-    }
-
-    async retryFailedAnalysis() {
-        return this.request<{ message: string; reset: number }>("/analysis/retry-failed", {
             method: "POST",
         });
     }
