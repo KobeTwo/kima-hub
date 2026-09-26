@@ -11,6 +11,10 @@ jest.mock("../../utils/systemSettings", () => ({
     getSystemSettings: jest.fn(),
 }));
 
+jest.mock("../../utils/userNavidromeSettings", () => ({
+    getUserNavidromeSettings: jest.fn(),
+}));
+
 jest.mock("../../utils/logger", () => ({
     logger: {
         debug: jest.fn(),
@@ -28,11 +32,13 @@ jest.mock("axios", () => ({
 import axios from "axios";
 import { prisma } from "../../utils/db";
 import { getSystemSettings } from "../../utils/systemSettings";
+import { getUserNavidromeSettings } from "../../utils/userNavidromeSettings";
 import { navidromeSync } from "../navidromeSync";
 
 const mockedAxios = jest.mocked(axios);
 const mockedPrisma = jest.mocked(prisma);
 const mockedSettings = jest.mocked(getSystemSettings);
+const mockedUserSettings = jest.mocked(getUserNavidromeSettings);
 
 const SETTINGS = {
     navidromeSyncEnabled: true,
@@ -133,6 +139,7 @@ describe("navidromeSync", () => {
     beforeEach(async () => {
         jest.clearAllMocks();
         mockedSettings.mockResolvedValue(SETTINGS as never);
+        mockedUserSettings.mockResolvedValue(null);
         // drain any pending dirty playlists from previous tests
         await navidromeSync.flush();
     });
@@ -144,7 +151,7 @@ describe("navidromeSync", () => {
             );
             playlistWithExistingNavidromeCopy();
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("synced");
             expect(result.matched).toBe(2);
@@ -210,7 +217,7 @@ describe("navidromeSync", () => {
                 )
                 .mockResolvedValueOnce(ok());
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("synced");
             const urls = mockedAxios.post.mock.calls.map((c) => c[0] as string);
@@ -227,7 +234,7 @@ describe("navidromeSync", () => {
                 items: [],
             } as never);
 
-            const result = await navidromeSync.syncPlaylist("pl-2");
+            const [result] = await navidromeSync.syncPlaylist("pl-2");
 
             expect(result.status).toBe("skipped_empty");
             expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -241,7 +248,7 @@ describe("navidromeSync", () => {
                 items: [PLAYLIST.items[0]],
             } as never);
 
-            const result = await navidromeSync.syncPlaylist("pl-3");
+            const [result] = await navidromeSync.syncPlaylist("pl-3");
 
             expect(result.status).toBe("skipped_mix");
             expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -250,7 +257,7 @@ describe("navidromeSync", () => {
         it("returns skipped_not_found for unknown ids", async () => {
             mockedPrisma.playlist.findUnique.mockResolvedValue(null);
 
-            const result = await navidromeSync.syncPlaylist("nope");
+            const [result] = await navidromeSync.syncPlaylist("nope");
 
             expect(result.status).toBe("skipped_not_found");
             expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -276,7 +283,7 @@ describe("navidromeSync", () => {
                 .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(ok()); // createPlaylist
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("synced");
             expect(result.matched).toBe(1);
@@ -295,7 +302,7 @@ describe("navidromeSync", () => {
                 PLAYLIST as never
             );
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("skipped_not_configured");
             expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -330,7 +337,7 @@ describe("navidromeSync", () => {
                 .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
                 .mockResolvedValueOnce(ok());
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("synced");
             expect(result.name).toBe("KIMA Road Trip");
@@ -347,7 +354,7 @@ describe("navidromeSync", () => {
             mockedPrisma.playlist.findUnique.mockResolvedValue(
                 PLAYLIST as never
             );
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
             expect(result.status).toBe("skipped_not_configured");
             expect(mockedAxios.post).not.toHaveBeenCalled();
         });
@@ -372,7 +379,7 @@ describe("navidromeSync", () => {
                     ok({ searchResult3: { song: [] } })
                 );
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("skipped_no_matches");
             expect(result.matched).toBe(0);
@@ -394,19 +401,18 @@ describe("navidromeSync", () => {
             const gate = new Promise((res) => {
                 resolveFindUnique = res;
             });
+            // findUnique wird einmal pro Ziel-Ausführung aufgerufen (1 Ziel)
             mockedPrisma.playlist.findUnique.mockReturnValue(gate as never);
             playlistWithExistingNavidromeCopy();
 
             const first = navidromeSync.syncPlaylist("pl-1");
             const second = navidromeSync.syncPlaylist("pl-1");
 
-            // second call must share the in-flight promise
-            expect(second).toBe(first);
-
+            // Beide teilen sich dieselbe In-Flight-Promises pro Ziel
             resolveFindUnique!(PLAYLIST);
             const [r1, r2] = await Promise.all([first, second]);
-            expect(r1).toBe(r2);
-            // exactly one execution: getPlaylists, delete, 2x search3, create
+            expect(r1[0]).toBe(r2[0]);
+            // genau eine Ausführung: getPlaylists, delete, 2x search3, create
             expect(mockedAxios.post).toHaveBeenCalledTimes(5);
         });
     });
@@ -442,7 +448,11 @@ describe("navidromeSync", () => {
                 { id: "pl-1" },
                 { id: "pl-2" },
             ] as never);
+            // Neue Ziel-Listen-Implementierung lädt pro Playlist zweimal
+            // (syncPlaylist-Load + doSyncPlaylist-Load); pl-2 ist leer und
+            // wird bereits im syncPlaylist-Load gescipped (nur 1 Load).
             mockedPrisma.playlist.findUnique
+                .mockResolvedValueOnce(PLAYLIST as never)
                 .mockResolvedValueOnce(PLAYLIST as never)
                 .mockResolvedValueOnce({
                     id: "pl-2",
@@ -514,7 +524,7 @@ describe("navidromeSync", () => {
                     new Error("Navidrome createPlaylist failed: 500")
                 );
 
-            const result = await navidromeSync.syncPlaylist("pl-1");
+            const [result] = await navidromeSync.syncPlaylist("pl-1");
 
             expect(result.status).toBe("error");
             expect(result.error).toContain("500");
@@ -552,7 +562,8 @@ describe("navidromeSync", () => {
                 (c) => (c[0] as string).includes("getPlaylists")
             );
             expect(getPlaylistsCalls).toHaveLength(1);
-            expect(mockedPrisma.playlist.findUnique).toHaveBeenCalledTimes(1);
+            // syncPlaylist-Load + doSyncPlaylist-Load (1 Ziel) = 2 Aufrufe
+            expect(mockedPrisma.playlist.findUnique).toHaveBeenCalledTimes(2);
         });
 
         it("skips a second concurrent flush (guard)", async () => {
@@ -642,6 +653,194 @@ describe("navidromeSync", () => {
                 (c) => (c[0] as string).includes("getPlaylists")
             );
             expect(getPlaylistsCalls).toHaveLength(2);
+        });
+    });
+
+    const PERSONAL = {
+        userId: "u-anna",
+        enabled: true,
+        url: "http://nd2:4533",
+        navidromeUser: "anna",
+        navidromePassword: "anna-secret",
+        namePrefix: "Anna: ",
+    };
+
+    describe("resolveTargets", () => {
+        it("returns the global target when global is configured", async () => {
+            const targets = await navidromeSync.resolveTargets({ userId: "u-anna" });
+            expect(targets).toHaveLength(1);
+            expect(targets[0].key).toBe("global");
+            expect(targets[0].label).toBe("global");
+            expect(targets[0].settings.user).toBe("robert");
+        });
+
+        it("returns both targets when personal settings are active", async () => {
+            mockedUserSettings.mockResolvedValue(PERSONAL as never);
+            const targets = await navidromeSync.resolveTargets({ userId: "u-anna" });
+            expect(targets.map((t) => t.key)).toEqual([
+                "global",
+                "personal:u-anna",
+            ]);
+        });
+
+        it("returns only personal when global is disabled (Review Focus 1)", async () => {
+            mockedSettings.mockResolvedValue(
+                { ...SETTINGS, navidromeSyncEnabled: false } as never
+            );
+            mockedUserSettings.mockResolvedValue(PERSONAL as never);
+            const targets = await navidromeSync.resolveTargets({ userId: "u-anna" });
+            expect(targets.map((t) => t.key)).toEqual(["personal:u-anna"]);
+        });
+
+        it("skips the personal target when enabled but incomplete (Review Focus 1)", async () => {
+            mockedUserSettings.mockResolvedValue(
+                { ...PERSONAL, navidromePassword: null } as never
+            );
+            const targets = await navidromeSync.resolveTargets({ userId: "u-anna" });
+            expect(targets.map((t) => t.key)).toEqual(["global"]);
+        });
+
+        it("returns no targets when neither is configured", async () => {
+            mockedSettings.mockResolvedValue(
+                { ...SETTINGS, navidromeSyncEnabled: false } as never
+            );
+            const targets = await navidromeSync.resolveTargets({ userId: "u-x" });
+            expect(targets).toHaveLength(0);
+        });
+
+        it("dedupes identical global/personal targets incl. case + trailing slash (Review Focus 3)", async () => {
+            // Global: http://navidrome:4533/ , user "robert", prefix ""
+            // Persönlich: http://navidrome:4533 (keine End-Schrägstriche), user "ROBERT", Prefix ""
+            mockedUserSettings.mockResolvedValue(
+                {
+                    userId: "u-anna",
+                    enabled: true,
+                    url: "http://navidrome:4533",
+                    navidromeUser: "ROBERT",
+                    navidromePassword: "secret",
+                    namePrefix: "",
+                } as never
+            );
+            const targets = await navidromeSync.resolveTargets({ userId: "u-anna" });
+            expect(targets).toHaveLength(1);
+            expect(targets[0].key).toBe("global"); // erstes Ziel bleibt
+        });
+    });
+
+    describe("multi-target sync", () => {
+        function personalNavidromeCopy() {
+            // 2x search3 (2 Tracks) + getPlaylists + createPlaylist für das persönliche Ziel
+            mockedAxios.post
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [
+                                { id: "aw-1", title: "Wonderwall", artist: "Oasis", isrc: ["USX120400001"], duration: 228 },
+                            ],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [{ id: "an-1", title: "No Signal", artist: "The Weeknd", duration: 200 }],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockResolvedValueOnce(ok());
+        }
+
+        it("syncs to both targets and reports one result per target", async () => {
+            mockedPrisma.playlist.findUnique.mockResolvedValue(PLAYLIST as never);
+            mockedUserSettings.mockResolvedValue(PERSONAL as never);
+            playlistWithExistingNavidromeCopy(); // globales Ziel
+            personalNavidromeCopy(); // persönliches Ziel
+
+            const results = await navidromeSync.syncPlaylist("pl-1");
+
+            expect(results.map((r) => r.target)).toEqual(["global", "personal"]);
+            expect(results.every((r) => r.status === "synced")).toBe(true);
+            // globales Ziel: Name ohne Prefix; persönliches Ziel: mit "Anna: "
+            expect(results[0].name).toBe("Road Trip");
+            expect(results[1].name).toBe("Anna: Road Trip");
+        });
+
+        it("isolates targets: 0 matches on global does not block personal (Review Focus 1)", async () => {
+            mockedPrisma.playlist.findUnique.mockResolvedValue(PLAYLIST as never);
+            mockedUserSettings.mockResolvedValue(PERSONAL as never);
+            // globales Ziel: 4x leeres search3 (2 Queries x 2 Tracks) -> 0 Matches
+            mockedAxios.post
+                .mockResolvedValueOnce(ok({ searchResult3: { song: [] } }))
+                .mockResolvedValueOnce(ok({ searchResult3: { song: [] } }))
+                .mockResolvedValueOnce(ok({ searchResult3: { song: [] } }))
+                .mockResolvedValueOnce(ok({ searchResult3: { song: [] } }))
+                // persönliches Ziel: alles gefunden
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [{ id: "aw-1", title: "Wonderwall", artist: "Oasis", isrc: ["USX120400001"], duration: 228 }],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(
+                    ok({
+                        searchResult3: {
+                            song: [{ id: "an-1", title: "No Signal", artist: "The Weeknd", duration: 200 }],
+                        },
+                    })
+                )
+                .mockResolvedValueOnce(ok({ playlists: { playlist: [] } }))
+                .mockResolvedValueOnce(ok());
+
+            const results = await navidromeSync.syncPlaylist("pl-1");
+
+            expect(results[0].target).toBe("global");
+            expect(results[0].status).toBe("skipped_no_matches");
+            expect(results[1].target).toBe("personal");
+            expect(results[1].status).toBe("synced");
+        });
+
+        it("reports skipped_not_configured when no target resolves", async () => {
+            mockedSettings.mockResolvedValue(
+                { ...SETTINGS, navidromeSyncEnabled: false } as never
+            );
+            mockedPrisma.playlist.findUnique.mockResolvedValue(PLAYLIST as never);
+
+            const results = await navidromeSync.syncPlaylist("pl-1");
+
+            expect(results).toEqual([
+                expect.objectContaining({
+                    status: "skipped_not_configured",
+                    target: "none",
+                }),
+            ]);
+            expect(mockedAxios.post).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("syncUserPlaylists", () => {
+        it("only fetches that user's non-mix playlists (Review Focus 5)", async () => {
+            mockedPrisma.playlist.findMany.mockResolvedValue([{ id: "pl-1" }] as never);
+            mockedPrisma.playlist.findUnique.mockResolvedValue({
+                id: "pl-1",
+                mixId: null,
+                name: "Empty",
+                items: [],
+            } as never);
+            mockedSettings.mockResolvedValue(
+                { ...SETTINGS, navidromeSyncEnabled: false } as never
+            );
+
+            const results = await navidromeSync.syncUserPlaylists("u-anna");
+
+            expect(mockedPrisma.playlist.findMany).toHaveBeenCalledWith({
+                where: { userId: "u-anna", mixId: null },
+                select: { id: true },
+                orderBy: { createdAt: "asc" },
+            });
+            expect(results).toHaveLength(1);
+            expect(results[0].status).toBe("skipped_empty");
         });
     });
 });
