@@ -257,7 +257,8 @@ export function PersonalNavidromeSyncSection() {
                             />
                         </div>
                         <p className="mt-2 text-xs font-mono text-white/30 uppercase tracking-wider">
-                            Syncet deine Playlists zu allen aktiven Zielen (global + hier gespeichertes Ziel).
+                            Verwendet die gespeicherten Settings — Änderungen zuerst speichern. Syncet deine
+                            Playlists zu allen aktiven Zielen (global + hier gespeichertes Ziel).
                         </p>
                     </div>
                 </>
