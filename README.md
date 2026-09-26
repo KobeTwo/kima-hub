@@ -649,7 +649,7 @@ Kima offers two search modes:
 
 In Settings you can configure integrations (Lidarr, Soulseek), download behavior, library enrichment/cache options, user management, and API tokens.
 
-**Navidrome Sync** - Mirror Kima playlists to your Navidrome instance so they play in any Subsonic-compatible client. Sync runs after imports, scans, and manual playlist edits (within a minute of changes).
+**Navidrome Sync** - Mirror Kima playlists to your Navidrome instance so they play in any Subsonic-compatible client. Sync runs after imports, scans, and manual playlist edits (within a minute of changes). The admin configures the **global target** (synced for every user's playlists). Each user can optionally add a **personal target** (their own Navidrome account) under Settings → "Navidrome Sync (persönlich)".
 
 <p align="center">
   <img src="assets/screenshots/desktop-settings.png" alt="Settings" width="800">
