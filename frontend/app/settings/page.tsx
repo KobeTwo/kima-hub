@@ -16,6 +16,7 @@ import { SubsonicSection } from "@/features/settings/components/sections/Subsoni
 import { DownloadPreferencesSection } from "@/features/settings/components/sections/DownloadPreferencesSection";
 import { LidarrSection } from "@/features/settings/components/sections/LidarrSection";
 import { NavidromeSyncSection } from "@/features/settings/components/sections/NavidromeSyncSection";
+import { PersonalNavidromeSyncSection } from "@/features/settings/components/sections/PersonalNavidromeSyncSection";
 import { SoulseekSection } from "@/features/settings/components/sections/SoulseekSection";
 import { AIServicesSection } from "@/features/settings/components/sections/AIServicesSection";
 import { StoragePathsSection } from "@/features/settings/components/sections/StoragePathsSection";
@@ -27,6 +28,7 @@ import { CorruptTracksSection } from "@/features/settings/components/sections/Co
 const sidebarItems: SidebarItem[] = [
     { id: "account", label: "Account" },
     { id: "subsonic", label: "Native Apps" },
+    { id: "navidrome-sync-personal", label: "Navidrome Sync (persönlich)" },
     { id: "download-preferences", label: "Download Preferences", adminOnly: true },
     { id: "lidarr", label: "Download Services", adminOnly: true },
     { id: "navidrome-sync", label: "Navidrome Sync", adminOnly: true },
@@ -122,6 +124,9 @@ export default function SettingsPage() {
 
                 {/* Native Apps - Subsonic */}
                 <SubsonicSection />
+
+                {/* Personal Navidrome Sync - für alle User */}
+                <PersonalNavidromeSyncSection />
 
                 {/* Admin-only sections */}
                 {isAdmin && (

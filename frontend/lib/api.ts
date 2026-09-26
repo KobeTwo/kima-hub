@@ -1,3 +1,5 @@
+import type { PersonalNavidromeSyncSettings } from "../features/settings/types";
+
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -855,6 +857,39 @@ class ApiClient {
 
     async syncNavidromeNow() {
         return this.request<ApiData>("/system-settings/navidrome-sync/now", {
+            method: "POST",
+        });
+    }
+
+    // Personal (per-user) Navidrome Sync
+    async getMyNavidromeSync() {
+        return this.request<PersonalNavidromeSyncSettings | null>(
+            "/settings/navidrome-sync/me"
+        );
+    }
+
+    async saveMyNavidromeSync(data: Partial<PersonalNavidromeSyncSettings>) {
+        return this.request<PersonalNavidromeSyncSettings>(
+            "/settings/navidrome-sync/me",
+            {
+                method: "POST",
+                body: JSON.stringify(data),
+            }
+        );
+    }
+
+    async testMyNavidromeSync(url: string, username: string, password: string) {
+        return this.request<ServiceTestResult>(
+            "/settings/navidrome-sync/me/test",
+            {
+                method: "POST",
+                body: JSON.stringify({ url, username, password }),
+            }
+        );
+    }
+
+    async syncMyNavidromeNow() {
+        return this.request<ApiData>("/settings/navidrome-sync/me/sync-now", {
             method: "POST",
         });
     }

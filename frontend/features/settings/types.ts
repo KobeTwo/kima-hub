@@ -48,6 +48,14 @@ export interface SystemSettings {
     navidromeNamePrefix: string;
 }
 
+export interface PersonalNavidromeSyncSettings {
+    enabled: boolean;
+    url: string | null;
+    navidromeUser: string | null;
+    navidromePassword: string | null;
+    namePrefix: string;
+}
+
 export interface ApiKey {
     id: string;
     name: string;
