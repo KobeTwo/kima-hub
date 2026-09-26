@@ -168,25 +168,35 @@ describe("POST /system-settings/navidrome-sync/now", () => {
         (prisma.apiKey.findUnique as jest.Mock).mockResolvedValue(null);
     });
 
-    it("returns 400 when sync is not configured/enabled", async () => {
+    it("returns results even when the global config is inactive (per-user targets may still apply)", async () => {
         (getSystemSettings as jest.Mock).mockResolvedValue({
             navidromeSyncEnabled: false,
             navidromeUrl: "http://navidrome:4533",
             navidromeUser: "robert",
             navidromePassword: "secret",
         });
+        (navidromeSync.syncAll as jest.Mock).mockResolvedValue([
+            {
+                playlistId: "p1",
+                name: "Road Trip",
+                status: "skipped_not_configured",
+                target: "none",
+            },
+        ]);
         const app = makeApp();
         const res = await request(app)
             .post("/system-settings/navidrome-sync/now")
             .set("Authorization", `Bearer ${token()}`);
-        expect(res.status).toBe(400);
-        expect(navidromeSync.syncAll).not.toHaveBeenCalled();
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.results[0].status).toBe("skipped_not_configured");
+        expect(navidromeSync.syncAll).toHaveBeenCalledTimes(1);
     });
 
     it("runs syncAll when configured and returns its results", async () => {
         (getSystemSettings as jest.Mock).mockResolvedValue(CONFIGURED);
         (navidromeSync.syncAll as jest.Mock).mockResolvedValue([
-            { playlistId: "p1", name: "Road Trip", status: "synced" },
+            { playlistId: "p1", name: "Road Trip", status: "synced", target: "global" },
         ]);
         const app = makeApp();
         const res = await request(app)
@@ -198,13 +208,11 @@ describe("POST /system-settings/navidrome-sync/now", () => {
         expect(navidromeSync.syncAll).toHaveBeenCalledTimes(1);
     });
 
-    it("syncs the given playlist ids when provided", async () => {
+    it("syncs the given playlist ids when provided (flattened per-target results)", async () => {
         (getSystemSettings as jest.Mock).mockResolvedValue(CONFIGURED);
-        (navidromeSync.syncPlaylist as jest.Mock).mockResolvedValue({
-            playlistId: "p9",
-            name: "Nine",
-            status: "synced",
-        });
+        (navidromeSync.syncPlaylist as jest.Mock).mockResolvedValue([
+            { playlistId: "p9", name: "Nine", status: "synced", target: "global" },
+        ]);
         const app = makeApp();
         const res = await request(app)
             .post("/system-settings/navidrome-sync/now")
@@ -213,5 +221,7 @@ describe("POST /system-settings/navidrome-sync/now", () => {
         expect(res.status).toBe(200);
         expect(navidromeSync.syncPlaylist).toHaveBeenCalledWith("p9");
         expect(navidromeSync.syncAll).not.toHaveBeenCalled();
+        expect(res.body.results).toHaveLength(1);
+        expect(res.body.results[0].status).toBe("synced");
     });
 });

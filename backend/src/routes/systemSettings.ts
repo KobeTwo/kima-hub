@@ -792,22 +792,12 @@ router.post("/test-navidrome", async (req, res) => {
 });
 
 // Trigger a Navidrome playlist sync now
+// Achtung: kein 400-Gate mehr — auch bei inaktiver Global-Config können
+// persönliche (per-user) Ziele syncen. Nicht konfigurierte Playlisten
+// liefern in den Ergebnissen "skipped_not_configured".
 router.post("/navidrome-sync/now", async (req, res) => {
   try {
     const { playlistIds } = req.body;
-
-    const { getSystemSettings } = await import("../utils/systemSettings");
-    const settings = await getSystemSettings();
-    if (
-      !settings?.navidromeSyncEnabled ||
-      !settings.navidromeUrl ||
-      !settings.navidromeUser ||
-      !settings.navidromePassword
-    ) {
-      return res.status(400).json({
-        error: "Navidrome sync is not configured/enabled in settings",
-      });
-    }
 
     const { navidromeSync } = await import("../services/navidromeSync");
     const ids = Array.isArray(playlistIds)
@@ -815,9 +805,9 @@ router.post("/navidrome-sync/now", async (req, res) => {
       : [];
     const results =
       ids.length > 0
-        ? await Promise.all(
-            ids.map((id: string) => navidromeSync.syncPlaylist(id))
-          )
+        ? (
+            await Promise.all(ids.map((id: string) => navidromeSync.syncPlaylist(id)))
+          ).flat()
         : await navidromeSync.syncAll();
 
     res.json({ success: true, results });
