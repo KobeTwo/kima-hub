@@ -284,14 +284,11 @@ export function ActivityPanelToggle() {
     });
 
     useEffect(() => {
-        const handleToggle = () => setIsPanelOpen((prev) => !prev);
         const handleOpen = () => setIsPanelOpen(true);
         const handleClose = () => setIsPanelOpen(false);
-        window.addEventListener("toggle-activity-panel", handleToggle);
         window.addEventListener("open-activity-panel", handleOpen);
         window.addEventListener("close-activity-panel", handleClose);
         return () => {
-            window.removeEventListener("toggle-activity-panel", handleToggle);
             window.removeEventListener("open-activity-panel", handleOpen);
             window.removeEventListener("close-activity-panel", handleClose);
         };

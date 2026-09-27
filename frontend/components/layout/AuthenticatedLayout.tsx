@@ -165,6 +165,14 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             <GalaxyBackground />
                             {children}
                         </main>
+
+                        {/* Activity Panel - notification overlay (desktop side panel) */}
+                        <ActivityPanel
+                            isOpen={activityPanel.isOpen}
+                            onToggle={activityPanel.toggle}
+                            activeTab={activityPanel.activeTab}
+                            onTabChange={activityPanel.setActiveTab}
+                        />
                     </div>
                 </div>
             </>

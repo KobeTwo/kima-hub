@@ -166,16 +166,17 @@ export function TopBar() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]); // Only re-run when pathname changes
 
-    // Mirror activity panel open state for aria-expanded
+    // Mirror activity panel open state for aria-expanded. Only the definitive
+    // open/close events are handled: "toggle-activity-panel" is interpreted by
+    // the panel owner alone (AuthenticatedLayout), which then emits the
+    // resulting state. Flipping local state here as well would depend on
+    // listener registration order and could end up inverted.
     useEffect(() => {
-        const handleToggle = () => setIsActivityPanelOpen((prev) => !prev);
         const handleOpen = () => setIsActivityPanelOpen(true);
         const handleClose = () => setIsActivityPanelOpen(false);
-        window.addEventListener("toggle-activity-panel", handleToggle);
         window.addEventListener("open-activity-panel", handleOpen);
         window.addEventListener("close-activity-panel", handleClose);
         return () => {
-            window.removeEventListener("toggle-activity-panel", handleToggle);
             window.removeEventListener("open-activity-panel", handleOpen);
             window.removeEventListener("close-activity-panel", handleClose);
         };
